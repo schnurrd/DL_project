@@ -33,7 +33,7 @@ Below is a description of each command-line argument that can be passed to the s
 Example usage:
 
 ```bash
-py -3.8 main.py -t 5 --n_runs 10 --n_epochs_base 10 --n_epochs_CL 15 --loss_breaks_base 0.03 --loss_breaks_CL 0.03 0.03 --dataset MNIST --procedure sep_ce_sep_kd --verbose
+python main.py -t 5 --n_runs 10 --n_epochs_base 10 --n_epochs_CL 15 --loss_breaks_base 0.03 --loss_breaks_CL 0.03 0.03 --dataset MNIST --procedure sep_ce_sep_kd --verbose
 ```
 
 This will train the model on 5 tasks on the (default) MNIST dataset -- so, 2 classes per task. It will do it 10 times and output the accuracies to a txt file in the default results folder (found in parent folder of Code). It will train the base model for up to 10 epochs or until it reaches 0.03 loss. It will train CL models for up to 15 epochs or until they reach under 0.03 CE loss and 0.03 KD loss. It will use CE separately on the current task and KD separately for each previous task. It will be verbose and print messages during training.
