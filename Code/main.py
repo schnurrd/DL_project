@@ -29,8 +29,8 @@ def handle_args_parsing():
     parser.add_argument("--n_epochs_CL", type=int, required=True, help="Maximum number of epochs to train CL models for")
     parser.add_argument("--out_file", type=Path, required=False, help="If specified, will output all verbose messages to a file")
     parser.add_argument("--optimiser", type=str, required=False, help="Optimiser to use during training")
-    parser.add_argument("--lr", type=str, required=False, help="Learning rate for optimiser")
-    parser.add_argument("--momentum", type=str, required=False, help="Momentum for optimiser")
+    parser.add_argument("--lr", type=float, required=False, help="Learning rate for optimiser")
+    parser.add_argument("--momentum", type=float, required=False, help="Momentum for optimiser")
     args = parser.parse_args()
 
     return args
