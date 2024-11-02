@@ -22,7 +22,7 @@ def handle_args_parsing():
     parser.add_argument("--model", "-m", required=False, type=str, help="Model to use. Supported are (VenEtAlMLP). Default is VenEtAlMLP")
     parser.add_argument("--procedure", "-p", required=False, type=str, help="Training procedure. Supported are (sep_CE_comb_KD, sep_CE_sep_KD). Default is sep_CE_comb_KD.")
     parser.add_argument("--output_dir", required=False, type=str, help="Directory to write results to. Directory must exist!")
-    parser.add_argument("--verbose", "-v", required=False, type=bool, help="Set to true for verbose training on every run")
+    parser.add_argument("--verbose", "-v", action='store_true', required=False, help="Set to true for verbose training on every run")
     parser.add_argument("--loss_breaks_base", type=float, nargs='+', required=True, help="Set the loss breaks for the training of the base model (task 0)")
     parser.add_argument("--loss_breaks_CL", type=float, nargs='+', required=True, help="Set the loss breaks for the training of continual models (tasks > 0)")
     parser.add_argument("--n_epochs_base", type=int, required=True, help="Maximum number of epochs to train base model for")
