@@ -35,6 +35,7 @@ def handle_args_parsing():
 
     return args
 
+#malkata dreybi
 def main():
     args = handle_args_parsing()
 
@@ -94,7 +95,7 @@ def main():
         globals.verbose = args.verbose
 
     if args.out_file:
-        file = open(args.out_file, "w")
+        file = open(args.out_file, "a")
         sys.stdout = file  # Redirect stdout to the file
     
     dummy_param = [torch.nn.Parameter(torch.empty(0))] # the parameters are passed later in the training procedure
@@ -116,6 +117,7 @@ def main():
                 lr = args.lr
             else:
                 lr = 0.001
+            result_name += "ADAM_" + str(lr)
             globals.optimiser = optim.Adam(dummy_param, lr=lr)
         else:
             raise NotImplementedError("Unsupported optimiser")
@@ -133,7 +135,7 @@ def main():
         start_time = time.time()
         print("Starting run " + str(i+1))
         net = CL_train(model, trainloaders, testloaders, trainingProcedure, args.n_epochs_base, args.n_epochs_CL,  args.loss_breaks_base, args.loss_breaks_CL)
-        with open(output_dir + '/' + result_name + '.txt', 'w') as output_file:
+        with open(output_dir + '/' + result_name + '.txt', 'a') as output_file:
             accuracy = test(net, testloader)
             output_file.write(str(accuracy) + '\n')
         duration = time.time() - start_time
