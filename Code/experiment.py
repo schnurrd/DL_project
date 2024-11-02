@@ -33,9 +33,9 @@ def CL_train(model: Type[CLModel], trainloaders: List[DataLoader], testloaders: 
             net.CLCopy(prevModel, i)
         train_loader = trainloaders[i]
         if prevModel:
-            procedure.train_CL(net, prevModel, train_loader, i, verb, n_epochs_CL, loss_breaks_CL)
+            procedure.train_CL(net, prevModel, train_loader, i, n_epochs_CL, loss_breaks_CL)
         else:
-            procedure.train_base(net, train_loader, True, None, None, n_epochs_base, loss_breaks_base)
+            procedure.train_base(net, train_loader, None, None, n_epochs_base, loss_breaks_base)
         c_print("ITERATION", i+1)
         c_print("ACCURACIES PER SET:")
         with torch.no_grad():

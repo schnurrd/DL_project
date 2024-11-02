@@ -6,7 +6,8 @@ import globals
 from .training_procedure import TrainingProcedure
 
 class sep_CE_sep_KD(TrainingProcedure):
-    def train_base(self, net, trainloader, verbose = False, load_path = None, save_path = None, n_epochs = 2, losses_breaks=[0.05]):
+    def train_base(self, net, trainloader, load_path = None, save_path = None, n_epochs = 2, losses_breaks=[0.05]):
+        verbose = globals.verbose
         criterion = nn.CrossEntropyLoss()
         optimizer = globals.optimiser
         optimizer.param_groups[0]['params'] = list(net.parameters())
@@ -39,7 +40,8 @@ class sep_CE_sep_KD(TrainingProcedure):
             if save_path:
                 torch.save(net.state_dict(), save_path)
                 
-    def train_CL(self, net, prevModel, trainloader, task, verbose = False, n_epochs=4, losses_breaks=[0.03,0.03]):
+    def train_CL(self, net, prevModel, trainloader, task, n_epochs=4, losses_breaks=[0.03,0.03]):
+        verbose = globals.verbose
         prevModel.withDropout = False
         ceLoss = nn.CrossEntropyLoss()
         klDivLoss = nn.KLDivLoss(reduction="batchmean")
