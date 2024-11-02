@@ -64,3 +64,4 @@ Update main.py handling of the `optimiser` arg to load your new optimiser when p
 - Add "playground" section for jupyter notebook(s), which can make use of all the predefined classes here. While the scripts are useful for a fleshed out pipeline, it would be tedious to implement new modules from scratch inside the pipeline -- for that jupyter notebooks are more convenient
 - Update the input_size attribute for datasets to preserve dimensions -- will likely be used in CNNs
 - Add scripts which can aggregate the results files
+- Output per-task calibration errors when verbose
