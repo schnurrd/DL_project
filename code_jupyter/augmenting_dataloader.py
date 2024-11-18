@@ -8,12 +8,6 @@ import numpy as np
 import globals
 from image_utils import randomize
 
-def get_base_dataset(dataset):
-    """Recursively retrieve the base dataset from any nested Subset objects."""
-    while isinstance(dataset, torch.utils.data.Subset):
-        dataset = dataset.dataset
-    return dataset
-
 class AugmentedOODTrainset(Dataset):
     def __init__(self, iteration, num_ood_samples, alpha=0.5, save_path = "ood_data"):
         self.num_ood_samples = num_ood_samples
