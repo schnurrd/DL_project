@@ -20,12 +20,10 @@ from training_utils import (batch_compute_saliency_maps,
                             apply_mask_to_gradients,
                             CenterLoss)
 
-global CLASSES_PER_ITER, DEVICE, ITERATIONS, trainloaders, valloaders
-
 from augmenting_dataloader import AugmentedOODTrainset
 from visualizations import plot_embeddings, plot_confusion_matrix
+from image_utils import show_image
 
-buffer_size = 4
 centerLoss = None
 def build_buffer_data(inputs, labels, model, ood_label):
     #masked_images = mask_region_with_low_saliency(model, inputs, labels, 14)
@@ -34,7 +32,7 @@ def build_buffer_data(inputs, labels, model, ood_label):
     #return masked_images, torch.full_like(labels, ood_label)
     return masked_images, labels
 
-def train_model(net, trainloader, valloader, verbose = False, load_path = None, save_path = None, epochs = 5, l1_reg_strength = 0, centerLossStrength = 0, withBuffer = False, freezeCenterLossCenters = None):
+def train_model(net, trainloader, valloader, verbose = False, load_path = None, save_path = None, epochs = 5, l1_reg_strength = 0, centerLossStrength = 0, withBuffer = False, freezeCenterLossCenters = None, report_frequency=1):
     """
     Used to train on first task of CL.
     For more details, see comment of train_model_CL, most of which is analogous to this function
@@ -44,9 +42,11 @@ def train_model(net, trainloader, valloader, verbose = False, load_path = None, 
     ITERATIONS = globals.ITERATIONS
     trainloaders = globals.trainloaders
     valloaders = globals.valloaders
+    buffer_size = globals.BATCH_SIZE
+    global centerLoss
     if epochs > 0:
         augmented_dataset = AugmentedOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER)
-        trainloader = DataLoader(augmented_dataset, batch_size=4, shuffle=True, pin_memory=True, num_workers=0)
+        trainloader = DataLoader(augmented_dataset, batch_size=globals.BATCH_SIZE, shuffle=True, pin_memory=True, num_workers=0)
     buffer = []
     lr = 0.001
     centerLossLr = 0.005
@@ -76,6 +76,7 @@ def train_model(net, trainloader, valloader, verbose = False, load_path = None, 
             epoch_buffer_size = 0
             epoch_center_loss = 0.0
             val_epoch_loss = 0.0
+            buffer_runs = 0
             bufferBatch = False
             iterator = iter(trainloader)
             batch = next(iterator, None)
@@ -122,6 +123,7 @@ def train_model(net, trainloader, valloader, verbose = False, load_path = None, 
                     # Process buffer if it exceeds the buffer size
                     if len(buffer) >= buffer_size:
                         epoch_buffer_size += len(buffer)
+                        buffer_runs += 1
                         bufferBatch = True
                         buffer_images, buffer_labels = zip(*buffer)
                         batch = torch.stack(buffer_images).to(DEVICE), torch.tensor(buffer_labels).to(DEVICE)
@@ -142,13 +144,13 @@ def train_model(net, trainloader, valloader, verbose = False, load_path = None, 
             
             val_epoch_loss /= len(valloader)
             if epoch_buffer_size != 0:
-                epoch_loss /= (len(trainloader) + epoch_buffer_size)
-                epoch_center_loss /= (len(trainloader) + epoch_buffer_size)
-                epoch_buffer_loss /= epoch_buffer_size
+                epoch_loss /= (len(trainloader) + buffer_runs)
+                epoch_center_loss /= (len(trainloader) + buffer_runs)
+                epoch_buffer_loss /= buffer_runs
             else:
                 epoch_loss /= len(trainloader)
                 epoch_center_loss /= (len(trainloader))
-            if verbose:
+            if verbose and epoch%report_frequency == 0:
                 print(f"Epoch {epoch}, CE Loss: {epoch_loss:.4f}, center loss: {epoch_center_loss:.4f}, of which buffer loss: {epoch_buffer_loss:.4f} for buffer with size {epoch_buffer_size:.1f}")
                 print("Validation loss", val_epoch_loss)
                 print("Fraction of nonzero parameters", calculate_nonzero_percentage(net), '\n')
@@ -159,7 +161,24 @@ def train_model(net, trainloader, valloader, verbose = False, load_path = None, 
             torch.save(net.state_dict(), save_path)
         update_EWC_data(net, trainloader.dataset, 1)
 
-def train_model_CL(net, prevModel, trainloader, valloader, iteration, verbose = False, n_epochs=4, validateOnAll = False, freeze_nonzero_params = False, l1_reg_strength = 0, ewc_reg_strength = 0, kd_reg_strength = 0, withBuffer = False, distance_embeddings_strength = 0, centerLossStrength = 0, freezeCenterLossCenters = None):
+def train_model_CL(net, 
+                   prevModel, 
+                   trainloader, 
+                   valloader, 
+                   iteration, 
+                   verbose = False, 
+                   n_epochs=4, 
+                   validateOnAll = False, 
+                   freeze_nonzero_params = False, 
+                   l1_reg_strength = 0, 
+                   ewc_reg_strength = 0, 
+                   kd_reg_strength = 0, 
+                   withBuffer = False, 
+                   distance_embeddings_strength = 0, 
+                   centerLossStrength = 0, 
+                   freezeCenterLossCenters = None, 
+                   report_frequency=1,
+                   maxGradNorm = None):
     """
     Parameters:
     ----------
@@ -203,14 +222,16 @@ def train_model_CL(net, prevModel, trainloader, valloader, iteration, verbose = 
         Use stored center loss centers; if None, centers will be computed during training.
         Only works if first running some training without center loss on current task
     """
+    torch.autograd.set_detect_anomaly = True
     CLASSES_PER_ITER = globals.CLASSES_PER_ITER
     DEVICE = globals.DEVICE
     ITERATIONS = globals.ITERATIONS
     trainloaders = globals.trainloaders
     valloaders = globals.valloaders
+    buffer_size = globals.BATCH_SIZE
     global centerLoss
     augmented_dataset = AugmentedOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER)
-    trainloader = DataLoader(augmented_dataset, batch_size=4, shuffle=True, pin_memory=True, num_workers=0)
+    trainloader = DataLoader(augmented_dataset, batch_size=globals.BATCH_SIZE, shuffle=True, pin_memory=True, num_workers=0)
     net, prevModel = net.to(DEVICE), prevModel.to(DEVICE)
     prevModel.withDropout = False
     ceLoss = nn.CrossEntropyLoss()
@@ -228,9 +249,9 @@ def train_model_CL(net, prevModel, trainloader, valloader, iteration, verbose = 
                 if (k+1)%CLASSES_PER_ITER == 0:
                     ind += 1
         params = list(net.parameters()) + list(centerLoss.parameters())
-        optimizer = optim.SGD(params, lr=lr, momentum=0.9)#, weight_decay = 0.001)
+        optimizer = optim.SGD(params, lr=lr, momentum=0)#, weight_decay = 0.001)
     else:
-        optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9)#, weight_decay = 0.001)
+        optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0)#, weight_decay = 0.001)
     #optimizer = optim.Adam(net.parameters(), lr=0.001)
     prevModel.eval()
     epoch = 0
@@ -250,6 +271,7 @@ def train_model_CL(net, prevModel, trainloader, valloader, iteration, verbose = 
         epoch_buffer_size = 0
         val_epochCELoss = 0.0
         val_epochKLLoss = 0.0
+        buffer_runs = 0
         bufferBatch = False
         iterator = iter(trainloader)
         batch = next(iterator, None)
@@ -261,6 +283,12 @@ def train_model_CL(net, prevModel, trainloader, valloader, iteration, verbose = 
             # get the inputs
             inputs, labels = batch
             inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            '''
+            if iteration == 4:
+                for i, l in enumerate(labels):
+                    print(l)
+                    show_image(inputs[i][0])
+            '''
             if not bufferBatch:
                 labels += iteration
             #print(labels)
@@ -319,12 +347,17 @@ def train_model_CL(net, prevModel, trainloader, valloader, iteration, verbose = 
                 for param in centerLoss.parameters():
                     # lr_cent is learning rate for center loss, e.g. lr_cent = 0.5
                     param.grad.data *= (centerLossLr / (centerLossStrength * lr))
+            if maxGradNorm is not None:
+                prevNorm = torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=maxGradNorm)
+                if prevNorm > maxGradNorm:
+                    print("clipped gradients!", prevNorm)
             optimizer.step()
 
-            _, preds = torch.max(outputs[:,-CLASSES_PER_ITER-1:], 1)
-            correct_preds = (preds == labels - iteration*(CLASSES_PER_ITER+1)) & ((labels - iteration*(CLASSES_PER_ITER+1) + 1) % (CLASSES_PER_ITER+1) != 0)
-            buffered = bufferBatch
-            bufferBatch = False
+            with torch.no_grad():
+                _, preds = torch.max(outputs[:,-CLASSES_PER_ITER-1:], 1)
+                correct_preds = (preds == labels - iteration*(CLASSES_PER_ITER+1)) & ((labels - iteration*(CLASSES_PER_ITER+1) + 1) % (CLASSES_PER_ITER+1) != 0)
+                buffered = bufferBatch
+                bufferBatch = False
             if withBuffer and not buffered and correct_preds.any():
                 # Compute saliency maps for the correctly classified images
                 correct_images = inputs[correct_preds]
@@ -337,6 +370,7 @@ def train_model_CL(net, prevModel, trainloader, valloader, iteration, verbose = 
                 # Process buffer if it exceeds the buffer size
                 if len(buffer) >= buffer_size:
                     epoch_buffer_size += len(buffer)
+                    buffer_runs += 1
                     bufferBatch = True
                     buffer_images, buffer_labels = zip(*buffer)
                     batch = torch.stack(buffer_images).to(DEVICE), torch.tensor(buffer_labels).to(DEVICE)
@@ -403,13 +437,13 @@ def train_model_CL(net, prevModel, trainloader, valloader, iteration, verbose = 
         val_epochCELoss /= len(valloader)
         val_epochKLLoss /= len(valloader)
         if epoch_buffer_size != 0:
-            buffer_epochLoss /= epoch_buffer_size
-            epochCELoss /= (len(trainloader) + epoch_buffer_size)
-            epochL1Loss /= (len(trainloader) + epoch_buffer_size)
-            epochEWCLoss /= (len(trainloader) + epoch_buffer_size)
-            epochKLLoss /= (len(trainloader) + epoch_buffer_size)
-            epochCenterLoss /= (len(trainloader) + epoch_buffer_size)
-            epochInterCenterLoss /= (len(trainloader) + epoch_buffer_size)
+            buffer_epochLoss /= buffer_runs
+            epochCELoss /= (len(trainloader) + buffer_runs)
+            epochL1Loss /= (len(trainloader) + buffer_runs)
+            epochEWCLoss /= (len(trainloader) + buffer_runs)
+            epochKLLoss /= (len(trainloader) + buffer_runs)
+            epochCenterLoss /= (len(trainloader) + buffer_runs)
+            epochInterCenterLoss /= (len(trainloader) + buffer_runs)
         else:
             epochCELoss /= len(trainloader)
             epochL1Loss /= len(trainloader)
@@ -417,22 +451,24 @@ def train_model_CL(net, prevModel, trainloader, valloader, iteration, verbose = 
             epochKLLoss /= len(trainloader)
             epochCenterLoss /= len(trainloader)
             epochInterCenterLoss /= len(trainloader)
-        if verbose:
+        breakCondition = task_val_accuracy > 0.925
+        if verbose and epoch%report_frequency == 0:
             print("Epoch", epoch, f" CELoss: {epochCELoss:.4f}, KLLoss: {epochKLLoss:.4f}, L1Loss: {epochL1Loss:.4f}, EWCLoss: {epochEWCLoss:.4f}, CenterLoss: {epochCenterLoss:.4f}, InterCenterLoss: {epochInterCenterLoss:.4f}")
             print("Buffer loss: ", buffer_epochLoss, " buffer size ", epoch_buffer_size)
             print("Validation losses:", val_epochCELoss, val_epochKLLoss)
             print("Validation accuracy (for last task)", task_val_accuracy)
             print("Fraction of nonzero parameters", calculate_nonzero_percentage(net))
-            if validateOnAll:
-                print("Total validation accuracy", total_val_accuracy)
+            print("Total validation accuracy", total_val_accuracy)
+            if validateOnAll and breakCondition:
                 plot_confusion_matrix(predicted_full, all_val_labels, list(range(CLASSES_PER_ITER*(iteration+1))))
                 plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, None)
             print('\n')
         #if epochCELoss  < 0.08 and epochKLLoss < 0.02:# and buffer_epochCELoss 
         # 
         #  and buffer_epochKLLoss < 0.2:
-        if epochCELoss < 0.03:#task_val_accuracy > 0.935 and epochCenterLoss < 0.65:
-        #if epochCELoss < 0.05:
+        #if task_val_accuracy > 0.935:
+        #if epochCELoss < 0.06:#
+        if breakCondition:
             break
     update_EWC_data(net, trainloader.dataset, iteration+1)
     plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, net.prev_embedding_centers)

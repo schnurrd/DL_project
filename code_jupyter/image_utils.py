@@ -73,7 +73,7 @@ def randomize(img):
         '''
         should_blacken = random.uniform(0,1)
         if should_blacken > 0.5:
-                img = random_square_dropout(img, img.shape[1]//2)
+                img = random_square_dropout(img, img.shape[1]//3)
         image_tensor = img
         C, H, W = image_tensor.shape
         

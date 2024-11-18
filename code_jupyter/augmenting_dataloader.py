@@ -7,7 +7,7 @@ import os
 import numpy as np
 import globals
 from image_utils import randomize
-
+'''
 class AugmentedOODTrainset(Dataset):
     def __init__(self, iteration, num_ood_samples, alpha=0.5, save_path = "ood_data"):
         self.num_ood_samples = num_ood_samples
@@ -237,21 +237,7 @@ class AugmentedOODTrainset(Dataset):
             return globals.full_trainset[self.indices[idx]]
         else:
             return self._generate_ood_sample()
-
 '''
-import torch
-import random
-from torchvision import transforms
-from torch.utils.data import Dataset
-from PIL import Image
-import os
-
-def get_base_dataset(dataset):
-    """Recursively retrieve the base dataset from any nested Subset objects."""
-    while isinstance(dataset, torch.utils.data.Subset):
-        dataset = dataset.dataset
-    return dataset
-
 class AugmentedOODTrainset(Dataset):
     def __init__(self, iteration, num_ood_samples, alpha=0.5, save_path = "ood_data"):
         self.num_ood_samples = num_ood_samples
@@ -470,11 +456,12 @@ class AugmentedOODTrainset(Dataset):
 
     def __len__(self):
         # Original dataset length + OOD samples
-        return self.original_length# + self.num_ood_samples
+        return self.original_length + self.num_ood_samples
 
     def __getitem__(self, idx):
         # Return original dataset sample or OOD sample
-        if torch.rand(1).item() < 1/3:
+        if idx >= self.original_length:
+        #if torch.rand(1).item() < 1/3:
             return self._generate_ood_sample()
         else:
             return globals.full_trainset[self.indices[idx]]
@@ -482,4 +469,3 @@ class AugmentedOODTrainset(Dataset):
             return globals.full_trainset[self.indices[idx]]
         else:
             return self._generate_ood_sample()
-'''
