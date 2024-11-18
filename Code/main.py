@@ -59,10 +59,13 @@ def main():
     globals.dataset = ds.Dataset(dataset)
 
     if args.model:
-        mod = args.mod
+        mod = args.model
         if mod.upper() == 'VENETALMLP':
             model = models.VenEtAlMLP
             result_name += 'VenEtAlMLP_'
+        elif mod.upper() == 'VENETALMLPPERTASK':
+            model = models.VenEtAlMLPPerTask
+            result_name += 'VenEtAlMLPPerTask'
         else:
             raise NotImplementedError("Unsupported model type")
     else:
