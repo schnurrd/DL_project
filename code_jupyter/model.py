@@ -30,19 +30,26 @@ class RandomSquareDropout(nn.Module):
         return img * mask
     
 class Net(nn.Module):
-    def __init__(self, n_classes):
+    def __init__(self, n_classes, withDropout = False):
         super(Net, self).__init__()
         self.n_classes = n_classes
         self.imgdr = RandomSquareDropout(8)
         #self.imgdr = nn.Dropout(0.2)
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3)
-        self.dr1 = nn.Dropout(0.2)
-        #self.dr1 = nn.Identity()
+        if withDropout:
+            self.dr1 = nn.Dropout(0.2)
+        else:
+            self.dr1 = nn.Identity()
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
-        self.dr2 = nn.Dropout(0.2)
-        #self.dr2 = nn.Identity()
+        if withDropout:
+            self.dr2 = nn.Dropout(0.2)
+        else:
+            self.dr2 = nn.Identity()
         self.fc1 = nn.Linear(64 * 5 * 5, 128)
-        self.dr3 = nn.Dropout(0.5)
+        if withDropout:
+            self.dr3 = nn.Dropout(0.5)
+        else:
+            self.dr3 = nn.Identity()
         self.n_embeddings = 128
         self.fc2 = nn.Linear(self.n_embeddings, n_classes)
         self.fisher_information = {}
