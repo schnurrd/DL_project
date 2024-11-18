@@ -249,9 +249,9 @@ def train_model_CL(net,
                 if (k+1)%CLASSES_PER_ITER == 0:
                     ind += 1
         params = list(net.parameters()) + list(centerLoss.parameters())
-        optimizer = optim.SGD(params, lr=lr, momentum=0)#, weight_decay = 0.001)
+        optimizer = optim.SGD(params, lr=lr, momentum=0.9)#, weight_decay = 0.001)
     else:
-        optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0)#, weight_decay = 0.001)
+        optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9)#, weight_decay = 0.001)
     #optimizer = optim.Adam(net.parameters(), lr=0.001)
     prevModel.eval()
     epoch = 0
