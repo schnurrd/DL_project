@@ -159,7 +159,7 @@ def train_model_CL(net,
                    ewc_loss = 0, 
                    kd_loss = 0,
                    distance_loss = 0, 
-                   center_loss = 0, 
+                   center_loss = 0,
                    freezeCenterLossCenters = None, 
                    report_frequency=1,
                    lr = 0.001,
@@ -167,7 +167,8 @@ def train_model_CL(net,
                    maxGradNorm = None,
                    stopOnLoss = 0.03,
                    stopOnValAcc = None,
-                   timeout=None):
+                   timeout=None,
+                   ):
     """
     Parameters:
     ----------
@@ -257,7 +258,7 @@ def train_model_CL(net,
         epochDistanceLoss = 0.0
         val_epochCELoss = 0.0
         val_epochKDLoss = 0.0
-
+        labels_offset = iteration
         for batch in trainloader:
             inputs, labels = batch
             inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
@@ -267,7 +268,7 @@ def train_model_CL(net,
                     print(l)
                     show_image(inputs[i][0])
             '''
-            labels += iteration
+            labels += labels_offset
             optimizer.zero_grad()
 
             outputs, embeddings = net.get_pred_and_embeddings(inputs)
@@ -307,7 +308,7 @@ def train_model_CL(net,
 
             if distance_loss != 0: # custom loss, tries to maximize distance of current embeddings from saved centers of embeddings of old classes
                 _distance_loss = torch.tensor(0.0, requires_grad = True)
-                interCenterMask = labels != augmented_dataset.ood_label
+                interCenterMask = labels != (augmented_dataset.ood_label + labels_offset)
                 for emb_center in net.prev_embedding_centers:
                     _distance_loss = _distance_loss - distance_loss*torch.sum(torch.norm(embeddings[interCenterMask] - emb_center, dim=1))/inputs.shape[0]
                 epochDistanceLoss += _distance_loss.item()
@@ -317,7 +318,6 @@ def train_model_CL(net,
                 _center_loss = centerLoss(embeddings, labels) * center_loss
                 epochCenterLoss += _center_loss.item()
                 loss = loss + _center_loss
-
             loss.backward()
             # work after calculating gradients - clipping, masking, etc..
             if freeze_nonzero_params:
