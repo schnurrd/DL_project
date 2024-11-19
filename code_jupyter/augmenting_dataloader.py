@@ -7,7 +7,7 @@ import os
 import numpy as np
 import globals
 from image_utils import randomize
-'''
+
 class AugmentedOODTrainset(Dataset):
     def __init__(self, iteration, num_ood_samples, alpha=0.5, save_path = "ood_data"):
         self.num_ood_samples = num_ood_samples
@@ -469,3 +469,4 @@ class AugmentedOODTrainset(Dataset):
             return globals.full_trainset[self.indices[idx]]
         else:
             return self._generate_ood_sample()
+'''
