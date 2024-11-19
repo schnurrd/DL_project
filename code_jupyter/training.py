@@ -145,7 +145,7 @@ def train_model(net,
                         buffer = []
                 if not bufferBatch:
                     batch = next(iterator, None)
-            if time.time() - start > timeout:
+            if timeout is not None and time.time() - start > timeout:
                 raise Exception("initial train timed out!")
             net.eval()
             for inputs, labels in valloader:
@@ -490,7 +490,7 @@ def train_model_CL(net,
             print("Validation accuracy (for last task)", task_val_accuracy)
             print("Fraction of nonzero parameters", calculate_nonzero_percentage(net))
             print("Total validation accuracy", total_val_accuracy)
-            if validateOnAll and breakCondition:
+            if validateOnAll:# and breakCondition:
                 plot_confusion_matrix(predicted_full, all_val_labels, list(range(CLASSES_PER_ITER*(iteration+1))))
                 plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, None)
             print('\n')
@@ -502,3 +502,4 @@ def train_model_CL(net,
         if breakCondition:
             break
     update_EWC_data(net, trainloader.dataset, iteration+1)
+    plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, net.prev_embedding_centers)
