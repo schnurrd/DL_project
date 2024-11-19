@@ -9,6 +9,7 @@ import torch.nn.functional as F
 import numpy as np
 import builtins
 import globals
+import time
 from torch.utils.data import DataLoader
 from training_utils import (batch_compute_saliency_maps, 
                             mask_top_n_saliency_regions_batch, 
@@ -32,11 +33,25 @@ def build_buffer_data(inputs, labels, model, ood_label):
     #return masked_images, torch.full_like(labels, ood_label)
     return masked_images, labels
 
-def train_model(net, trainloader, valloader, verbose = False, load_path = None, save_path = None, epochs = 5, l1_reg_strength = 0, centerLossStrength = 0, withBuffer = False, freezeCenterLossCenters = None, report_frequency=1):
+def train_model(net, 
+                trainloader, 
+                valloader, 
+                verbose = False, 
+                load_path = None, 
+                save_path = None, 
+                epochs = 5, 
+                l1_reg_strength = 0, 
+                centerLossStrength = 0, 
+                withBuffer = False, 
+                freezeCenterLossCenters = None, 
+                report_frequency=1,
+                stopOnLoss = None,
+                timeout = None):
     """
     Used to train on first task of CL.
     For more details, see comment of train_model_CL, most of which is analogous to this function
     """
+    start = time.time()
     CLASSES_PER_ITER = globals.CLASSES_PER_ITER
     DEVICE = globals.DEVICE
     ITERATIONS = globals.ITERATIONS
@@ -58,7 +73,7 @@ def train_model(net, trainloader, valloader, verbose = False, load_path = None, 
             pc = torch.stack(net.prev_embedding_centers)
             print("len centers", centerLoss.centers.data.shape)
             for k, t in enumerate(pc):
-                print("setting", k)
+                #print("setting", k)
                 centerLoss.centers.data[k] = t
         params = list(net.parameters()) + list(centerLoss.parameters())
         optimizer = optim.SGD(params, lr=lr, momentum=0.9)#, weight_decay = 0.001)
@@ -130,6 +145,8 @@ def train_model(net, trainloader, valloader, verbose = False, load_path = None, 
                         buffer = []
                 if not bufferBatch:
                     batch = next(iterator, None)
+            if time.time() - start > timeout:
+                raise Exception("initial train timed out!")
             net.eval()
             for inputs, labels in valloader:
                 with torch.no_grad():
@@ -154,7 +171,7 @@ def train_model(net, trainloader, valloader, verbose = False, load_path = None, 
                 print(f"Epoch {epoch}, CE Loss: {epoch_loss:.4f}, center loss: {epoch_center_loss:.4f}, of which buffer loss: {epoch_buffer_loss:.4f} for buffer with size {epoch_buffer_size:.1f}")
                 print("Validation loss", val_epoch_loss)
                 print("Fraction of nonzero parameters", calculate_nonzero_percentage(net), '\n')
-            if epoch_loss < 0.03:# and buffer_loss < 0.05:
+            if stopOnLoss is not None and epoch_loss < stopOnLoss:# and buffer_loss < 0.05:
             #if False:
                 break
         if save_path:
@@ -178,7 +195,12 @@ def train_model_CL(net,
                    centerLossStrength = 0, 
                    freezeCenterLossCenters = None, 
                    report_frequency=1,
-                   maxGradNorm = None):
+                   lr = 0.001,
+                   momentum = 0.9,
+                   maxGradNorm = None,
+                   stopOnLoss = None,
+                   stopOnValAcc = None,
+                   timeout=None):
     """
     Parameters:
     ----------
@@ -222,6 +244,7 @@ def train_model_CL(net,
         Use stored center loss centers; if None, centers will be computed during training.
         Only works if first running some training without center loss on current task
     """
+    start = time.time()
     torch.autograd.set_detect_anomaly = True
     CLASSES_PER_ITER = globals.CLASSES_PER_ITER
     DEVICE = globals.DEVICE
@@ -236,22 +259,21 @@ def train_model_CL(net,
     prevModel.withDropout = False
     ceLoss = nn.CrossEntropyLoss()
     klDivLoss = nn.KLDivLoss(reduction="batchmean")
-    lr = 0.001
     centerLossLr = 0.005
     if centerLossStrength > 0:
         if freezeCenterLossCenters is not None:
             pc = torch.stack(net.prev_embedding_centers)
             ind = 0 # must account for OOD class centers
             for k, t in enumerate(pc):
-                print("setting", ind)
+                #print("setting", ind)
                 centerLoss.centers.data[ind] = t
                 ind  += 1
                 if (k+1)%CLASSES_PER_ITER == 0:
                     ind += 1
         params = list(net.parameters()) + list(centerLoss.parameters())
-        optimizer = optim.SGD(params, lr=lr, momentum=0.9)#, weight_decay = 0.001)
+        optimizer = optim.SGD(params, lr=lr, momentum=momentum)#, weight_decay = 0.001)
     else:
-        optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9)#, weight_decay = 0.001)
+        optimizer = optim.SGD(net.parameters(), lr=lr, momentum=momentum)#, weight_decay = 0.001)
     #optimizer = optim.Adam(net.parameters(), lr=0.001)
     prevModel.eval()
     epoch = 0
@@ -406,6 +428,8 @@ def train_model_CL(net,
                 predicted_eval_task.extend(predicted.cpu().numpy())  # Move to CPU and convert to numpy for ease
                 task_val_labels.extend(labels.cpu().numpy())
                 optimizer.zero_grad()
+        if timeout is not None and time.time() - start > timeout:
+            raise Exception("CL train timed out!")
         correct = sum(p == t for p, t in zip(predicted_eval_task, task_val_labels))
         task_val_accuracy = correct / len(task_val_labels)
         if validateOnAll:
@@ -451,7 +475,14 @@ def train_model_CL(net,
             epochKLLoss /= len(trainloader)
             epochCenterLoss /= len(trainloader)
             epochInterCenterLoss /= len(trainloader)
-        breakCondition = task_val_accuracy > 0.925
+        breakCondition = True
+        if stopOnLoss is not None:
+            breakCondition = epochCELoss < stopOnLoss
+        if stopOnValAcc is not None:
+            breakCondition = breakCondition and task_val_accuracy > stopOnValAcc
+        if stopOnLoss is None and stopOnValAcc is None:
+            breakCondition = False
+        #breakCondition = task_val_accuracy > 0.925
         if verbose and epoch%report_frequency == 0:
             print("Epoch", epoch, f" CELoss: {epochCELoss:.4f}, KLLoss: {epochKLLoss:.4f}, L1Loss: {epochL1Loss:.4f}, EWCLoss: {epochEWCLoss:.4f}, CenterLoss: {epochCenterLoss:.4f}, InterCenterLoss: {epochInterCenterLoss:.4f}")
             print("Buffer loss: ", buffer_epochLoss, " buffer size ", epoch_buffer_size)
@@ -471,4 +502,3 @@ def train_model_CL(net,
         if breakCondition:
             break
     update_EWC_data(net, trainloader.dataset, iteration+1)
-    plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, net.prev_embedding_centers)
