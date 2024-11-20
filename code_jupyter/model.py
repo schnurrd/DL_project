@@ -33,8 +33,11 @@ class Net(nn.Module):
     def __init__(self, n_classes, withDropout = False):
         super(Net, self).__init__()
         self.n_classes = n_classes
-        self.imgdr = RandomSquareDropout(8)
-        #self.imgdr = nn.Dropout(0.2)
+        if withDropout:
+            self.imgdr = RandomSquareDropout(8)
+        else:
+            self.imgdr = nn.Identity()
+        self.imgdr = nn.Dropout(0.2)
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3)
         if withDropout:
             self.dr1 = nn.Dropout(0.2)
@@ -60,7 +63,7 @@ class Net(nn.Module):
             self.estimated_means[name] = torch.zeros_like(param).to(globals.DEVICE)
 
     def forward(self, x):
-        #x = self.imgdr(x)
+        x = self.imgdr(x)
         x = F.relu(self.conv1(x))
         x = F.max_pool2d(x, 2)
         x = self.dr1(x)

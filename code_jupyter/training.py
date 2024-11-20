@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from torch import autograd
 import numpy as np
 import builtins
 import globals
@@ -160,6 +161,7 @@ def train_model_CL(net,
                    kd_loss = 0,
                    distance_loss = 0, 
                    center_loss = 0,
+                   param_reuse_loss = 0,
                    freezeCenterLossCenters = None, 
                    report_frequency=1,
                    lr = 0.001,
@@ -256,6 +258,7 @@ def train_model_CL(net,
         epochEWCLoss = 0.0
         epochCenterLoss = 0.0
         epochDistanceLoss = 0.0
+        epochParamReuseLoss = 0.0
         val_epochCELoss = 0.0
         val_epochKDLoss = 0.0
         labels_offset = iteration
@@ -313,7 +316,22 @@ def train_model_CL(net,
                     _distance_loss = _distance_loss - distance_loss*torch.sum(torch.norm(embeddings[interCenterMask] - emb_center, dim=1))/inputs.shape[0]
                 epochDistanceLoss += _distance_loss.item()
                 loss = loss + _distance_loss
-            
+
+            if param_reuse_loss != 0:
+                mask = labels != iteration*(globals.CLASSES_PER_ITER+1) + globals.CLASSES_PER_ITER
+                net.zero_grad()
+                _output, _target = outputs[mask], labels[mask]
+                _output = F.log_softmax(_output, dim=1)
+                log_likelihood = _output[range(len(_target)), _target].mean()
+                grads = autograd.grad(log_likelihood, net.parameters(), create_graph=True)
+                fisher_information = [g**2 for g in grads]
+                flattened_current_fisher = torch.cat([g.view(-1) for g in fisher_information])
+                flattened_saved_fisher = torch.cat([param.view(-1) for param in net.fisher_information.values()])
+                _param_reuse_loss = param_reuse_loss*torch.dot(flattened_current_fisher, flattened_saved_fisher)
+                epochParamReuseLoss += _param_reuse_loss.item()
+                loss = loss + _param_reuse_loss
+
+
             if center_loss != 0: # center loss -- see https://github.com/KaiyangZhou/pytorch-center-loss
                 _center_loss = centerLoss(embeddings, labels) * center_loss
                 epochCenterLoss += _center_loss.item()
@@ -403,6 +421,7 @@ def train_model_CL(net,
         epochKDLoss /= len(trainloader)
         epochCenterLoss /= len(trainloader)
         epochDistanceLoss /= len(trainloader)
+        epochParamReuseLoss /= len(trainloader)
         breakCondition = True
         if stopOnLoss is not None:
             breakCondition = epochCELoss < stopOnLoss
@@ -412,7 +431,7 @@ def train_model_CL(net,
             breakCondition = False
         #breakCondition = task_val_accuracy > 0.925
         if verbose and epoch%report_frequency == 0:
-            print("Epoch", epoch, f" CELoss: {epochCELoss:.4f}, KLLoss: {epochKDLoss:.4f}, L1Loss: {epochL1Loss:.4f}, EWCLoss: {epochEWCLoss:.4f}, CenterLoss: {epochCenterLoss:.4f}, InterCenterLoss: {epochDistanceLoss:.4f}")
+            print("Epoch", epoch, f" CELoss: {epochCELoss:.4f}, KLLoss: {epochKDLoss:.4f}, L1Loss: {epochL1Loss:.4f}, EWCLoss: {epochEWCLoss:.4f}, CenterLoss: {epochCenterLoss:.4f}, InterCenterLoss: {epochDistanceLoss:.4f}, ParamReuseLoss: {epochParamReuseLoss:.4f}")
             print("Validation losses:", val_epochCELoss, val_epochKDLoss)
             print("Validation accuracy (for last task)", task_val_accuracy)
             print("Fraction of nonzero parameters", calculate_nonzero_percentage(net))
