@@ -42,7 +42,7 @@ def train_model(net,
                 timeout = None,
                 load_path = None, 
                 save_path = None, 
-                epochs = 5, 
+                epochs = 5,
                 l1_loss = 0, 
                 center_loss = 0,
                 freezeCenterLossCenters = None,
@@ -60,18 +60,20 @@ def train_model(net,
     ITERATIONS = globals.ITERATIONS
     trainloaders = globals.trainloaders
 
-    augmented_dataset = AugmentedOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER)
-    trainloader = DataLoader(augmented_dataset, batch_size=globals.BATCH_SIZE, shuffle=True, pin_memory=True, num_workers=0)
+    if globals.OOD_CLASS == 1:
+        ds = AugmentedOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER)
+    else:
+        ds = trainloaders[0].dataset
+    trainloader = DataLoader(ds, batch_size=globals.BATCH_SIZE, shuffle=True, pin_memory=True, num_workers=0)
     
     criterion = nn.CrossEntropyLoss()
     net = net.to(DEVICE)
     lr = 0.001
     centerLossLr = 0.005
     if center_loss > 0:
-        centerLoss = CenterLoss(num_classes=(CLASSES_PER_ITER+1)*ITERATIONS, feat_dim=net.n_embeddings, use_gpu=True)
+        centerLoss = CenterLoss(num_classes=(CLASSES_PER_ITER+globals.OOD_CLASS)*ITERATIONS, feat_dim=net.n_embeddings, use_gpu=True)
         if freezeCenterLossCenters is not None:
             pc = torch.stack(net.prev_embedding_centers)
-            print("len centers", centerLoss.centers.data.shape)
             for k, t in enumerate(pc):
                 #print("setting", k)
                 centerLoss.centers.data[k] = t
@@ -155,7 +157,8 @@ def train_model_CL(net,
                    verbose = False, 
                    n_epochs=4, 
                    validateOnAll = False, 
-                   freeze_nonzero_params = False, 
+                   freeze_nonzero_params = False,
+                   full_CE = False,
                    l1_loss = 0, 
                    ewc_loss = 0, 
                    kd_loss = 0,
@@ -194,6 +197,8 @@ def train_model_CL(net,
         If True, freeze model parameters with non-zero values so that they are not trained.
         Used to run some experiments in combination with L1 loss, where possibly the model uses sparse parameters for the
         initial tasks, leaving more parameters available to tune for consecutive tasks
+    full_CE : bool, optional (default=False)
+        If True, apply cross entropy to all outputs, instead of only for last task
     l1_loss : float, optional (default=0)
         Strength of L1 regularization applied to the model's weights to encourage sparsity.
     ewc_loss : float, optional (default=0)
@@ -205,9 +210,25 @@ def train_model_CL(net,
         and stored embedding centers of previous classes
     center_loss : float, optional (default=0)
         Strength of the center loss to enforce tighter clusters in the embedding space.
+    param_reuse_loss : float, optional (default=0)
+        Strength of param reuse loss - a customized loss which penalizes the model when it uses parameters which were important for previous tasks
     freezeCenterLossCenters : torch.Tensor or None, optional (default=None)
         Use stored center loss centers; if None, centers will be computed during training.
         Only works if first running some training without center loss on current task
+    report_frequency : int, optional (default=1)
+        on how many epochs to report accuracies, confusion matrices, embeddings, etc. 
+    lr : float, optional (default=0.001)
+        learning rate of optimizer
+    momentum : float, optional (default=0.9)
+        momentum of optimizer (if applicable)
+    maxGradNorm : float, optional (default=None)
+        if not None, gradients will be clipped to this norm
+    stopOnLoss : float, optional (default=0.03)
+        if not None, stop training when this cross entropy loss has been reached in training
+    stopOnValAcc : float, optional (default=None)
+        if not None, stop training when this accuracy has been reached during validation
+    timeout : float, optional (default=None)
+        if not None, raise an exception when training goes longer than this value in seconds (checked every epoch)
     """
     
 
@@ -220,8 +241,13 @@ def train_model_CL(net,
     trainloaders = globals.trainloaders
     valloaders = globals.valloaders
 
-    augmented_dataset = AugmentedOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER)
-    trainloader = DataLoader(augmented_dataset, batch_size=globals.BATCH_SIZE, shuffle=True, pin_memory=True, num_workers=0)
+    if globals.OOD_CLASS == 1:
+        ood_label = (iteration+1)*CLASSES_PER_ITER
+        ds = AugmentedOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER)
+    else:
+        ds = trainloaders[iteration].dataset
+    
+    trainloader = DataLoader(ds, batch_size=globals.BATCH_SIZE, shuffle=True, pin_memory=True, num_workers=0)
 
     net, prevModel = net.to(DEVICE), prevModel.to(DEVICE)
     prevModel.eval()
@@ -238,7 +264,7 @@ def train_model_CL(net,
                 #print("setting", ind)
                 centerLoss.centers.data[ind] = t
                 ind  += 1
-                if (k+1)%CLASSES_PER_ITER == 0:
+                if globals.OOD_CLASS == 1 and (k+1)%CLASSES_PER_ITER == 0:
                     ind += 1
         params = list(net.parameters()) + list(centerLoss.parameters())
         optimizer = optim.SGD(params, lr=lr, momentum=momentum)#, weight_decay = 0.001)
@@ -261,7 +287,7 @@ def train_model_CL(net,
         epochParamReuseLoss = 0.0
         val_epochCELoss = 0.0
         val_epochKDLoss = 0.0
-        labels_offset = iteration
+        labels_offset = (iteration if globals.OOD_CLASS == 1 else 0)
         for batch in trainloader:
             inputs, labels = batch
             inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
@@ -278,13 +304,16 @@ def train_model_CL(net,
             net.eval()
             outputsNoDropout = net(inputs)
             net.train()
-            oldClassOutputs = outputsNoDropout[:, :-CLASSES_PER_ITER-1]
+            oldClassOutputs = outputsNoDropout[:, :-CLASSES_PER_ITER-globals.OOD_CLASS]
             with torch.no_grad():
                 prevOutputs = prevModel(inputs)
 
             loss = torch.tensor(0.0, requires_grad = True)
 
-            _ceLoss = ceLoss(outputs[:,-CLASSES_PER_ITER-1:], labels - iteration*(CLASSES_PER_ITER+1))
+            if full_CE:
+                _ceLoss = ceLoss(outputs, labels)
+            else:
+                _ceLoss = ceLoss(outputs[:,-CLASSES_PER_ITER-globals.OOD_CLASS:], labels - iteration*(CLASSES_PER_ITER+globals.OOD_CLASS))
             epochCELoss += _ceLoss.item()
             loss = loss + _ceLoss
 
@@ -311,14 +340,20 @@ def train_model_CL(net,
 
             if distance_loss != 0: # custom loss, tries to maximize distance of current embeddings from saved centers of embeddings of old classes
                 _distance_loss = torch.tensor(0.0, requires_grad = True)
-                interCenterMask = labels != (augmented_dataset.ood_label + labels_offset)
+                if globals.OOD_CLASS != 1:
+                    interCenterMask = labels != (ood_label + labels_offset)
+                else:
+                    interCenterMask = torch.ones_like(labels, dtype=torch.bool)
                 for emb_center in net.prev_embedding_centers:
                     _distance_loss = _distance_loss - distance_loss*torch.sum(torch.norm(embeddings[interCenterMask] - emb_center, dim=1))/inputs.shape[0]
                 epochDistanceLoss += _distance_loss.item()
                 loss = loss + _distance_loss
 
             if param_reuse_loss != 0:
-                mask = labels != iteration*(globals.CLASSES_PER_ITER+1) + globals.CLASSES_PER_ITER
+                if globals.OOD_CLASS == 1:
+                    mask = labels != iteration*(globals.CLASSES_PER_ITER+1) + globals.CLASSES_PER_ITER
+                else:
+                    mask = torch.ones_like(labels, dtype=torch.bool)
                 net.zero_grad()
                 _output, _target = outputs[mask], labels[mask]
                 _output = F.log_softmax(_output, dim=1)
@@ -347,7 +382,7 @@ def train_model_CL(net,
                     param.grad.data *= (centerLossLr / (center_loss * lr))
             if maxGradNorm is not None:
                 prevNorm = torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=maxGradNorm)
-                if prevNorm > maxGradNorm:
+                if prevNorm > maxGradNorm and verbose:
                     print("clipped gradients!", prevNorm)
             
             optimizer.step()
@@ -365,17 +400,20 @@ def train_model_CL(net,
                 #masked_images = mask_top_n_saliency_regions_batch(inputs, saliency_maps, 2, 8)
                 outputs = net(inputs)
                 outputsNoDropout = outputs
-                oldClassOutputs = outputsNoDropout[:, :-CLASSES_PER_ITER-1]
+                oldClassOutputs = outputsNoDropout[:, :-CLASSES_PER_ITER-globals.OOD_CLASS]
                 with torch.no_grad():
                     prevOutputs = prevModel(inputs)
-                loss = ceLoss(outputs[:,-CLASSES_PER_ITER-1:], labels - iteration*CLASSES_PER_ITER)
+                loss = ceLoss(outputs[:,-CLASSES_PER_ITER-globals.OOD_CLASS:], labels - iteration*CLASSES_PER_ITER)
                 CELoss = loss.item()
                 val_epochCELoss += CELoss
                 #for it in range(iteration):
                 #    loss += klDivLoss(F.log_softmax(oldClassOutputs[:, it*CLASSES_PER_ITER:(it+1)*CLASSES_PER_ITER], dim=-1), F.softmax(prevOutputs[:, it*CLASSES_PER_ITER:(it+1)*CLASSES_PER_ITER], dim=-1))
                 loss += klDivLoss(F.log_softmax(oldClassOutputs, dim=-1), F.softmax(prevOutputs, dim=-1))
                 val_epochKDLoss += loss.item() - CELoss
-                outputs_no_OOD = outputs[:, [i for i in range(outputs.size(1)) if (i + 1) % (CLASSES_PER_ITER+1) != 0]]
+                if globals.OOD_CLASS == 1:
+                    outputs_no_OOD = outputs[:, [i for i in range(outputs.size(1)) if (i + 1) % (CLASSES_PER_ITER+1) != 0]]
+                else:
+                    outputs_no_OOD = outputs
                 _, predicted = torch.max(outputs_no_OOD, 1)
                 predicted_eval_task.extend(predicted.cpu().numpy())
                 task_val_labels.extend(labels.cpu().numpy())
@@ -399,7 +437,9 @@ def train_model_CL(net,
                         # Get the model's predictions
                         outputs = net(feat)
                         embeddings = net.get_embeddings(feat)
-                        outputs = outputs[:, [i for i in range(outputs.size(1)) if (i + 1) % (CLASSES_PER_ITER+1) != 0]]
+                        
+                        if globals.OOD_CLASS == 1:
+                            outputs = outputs[:, [i for i in range(outputs.size(1)) if (i + 1) % (CLASSES_PER_ITER+1) != 0]]
                         _, predicted = torch.max(outputs, 1)  # Assuming it's a classification task
                         
                         # Accumulate predictions and labels

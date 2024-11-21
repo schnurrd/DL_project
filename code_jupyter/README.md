@@ -1,6 +1,6 @@
 # Project Overview
 
-This project contains building blocks which allow experimenting on CL pipelines. While it has been made as abstract as possible, some assumptions must be correct to use it. Everything has been built to support an additional out-of-distribution class for every task, so if you want to run experiments where the model has exactly as many output neurons as the number of classes, this will not work. Additionally, everything has been used on the untransformed MNIST dataset, so a lot of the image-specific functions assume only one channel and assume that 0 corresponds to black.
+This project contains building blocks which allow experimenting on CL pipelines. While it has been made as abstract as possible, some assumptions must be correct to use it. Everything has been built to support an additional out-of-distribution class for every task, image-specific logic has been build for the untransformed MNIST dataset, so a lot of the image-specific functions assume only one channel and assume that 0 corresponds to black.
 
 ## File Descriptions
 
@@ -11,7 +11,7 @@ This file contains code for augmenting the dataset within the DataLoader with th
 This Jupyter Notebook is used for running and visualizing experiments. It allows you to interactively test models, debug training, and visualize results like metrics, losses, confusion matrices, learned features and feature embeddings.
 
 ### `globals.py`
-Defines global constants and variables for the project.
+Defines global constants and variables for the project. Importantly -- if globals.OOD_CLASS is set to 1, then an additional class is added for every task which generates OOD data (logic for that is in augmenting_dataloader)
 
 ### `image_utils.py`
 Includes utility functions for image augmentation and visualization, mostly used for generating OOD samples.

@@ -240,14 +240,17 @@ def update_EWC_data(model, dataset, iter, batch_size = 20):
     model.eval()
     log_likelihoods = []
     embeddings_per_class = {}
-    non_ood_classes = [(iter-1)*(globals.CLASSES_PER_ITER+1) + j for j in range(globals.CLASSES_PER_ITER)]
+    non_ood_classes = [(iter-1)*(globals.CLASSES_PER_ITER+globals.OOD_CLASS) + j for j in range(globals.CLASSES_PER_ITER)]
     for c in non_ood_classes:
         embeddings_per_class[c] = []
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 0)
     for data, target in loader:
         data, target = data.to(globals.DEVICE), target.to(globals.DEVICE)
-        target += iter-1
-        mask = target != (iter-1)*(globals.CLASSES_PER_ITER+1) + globals.CLASSES_PER_ITER
+        if globals.OOD_CLASS:
+            target += iter-1
+            mask = target != (iter-1)*(globals.CLASSES_PER_ITER+globals.OOD_CLASS) + globals.CLASSES_PER_ITER
+        else:
+            mask = torch.ones_like(target, dtype=torch.bool)
         model.zero_grad()
         output, embeddings = model.get_pred_and_embeddings(data)
         for c in non_ood_classes:

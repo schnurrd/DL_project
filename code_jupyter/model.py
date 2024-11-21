@@ -101,10 +101,6 @@ class Net(nn.Module):
             x = self.fc2(x)
             return x, embeddings
     
-    def freeze_prev_tasks_in_last_layer(self):
-        self.fc2.weight[:self.n_classes - globals.CLASSES_PER_ITER-1].grad = torch.zeros_like(self.fc2.weight[:self.n_classes - globals.CLASSES_PER_ITER-1])
-        self.fc2.bias[:self.n_classes - globals.CLASSES_PER_ITER-1].grad = torch.zeros_like(self.fc2.bias[:self.n_classes - globals.CLASSES_PER_ITER-1])
-
     def copyPrev(self, prevModel):
         self.conv1.weight = copy.deepcopy(prevModel.conv1.weight)
         self.conv1.bias = copy.deepcopy(prevModel.conv1.bias)
@@ -112,8 +108,8 @@ class Net(nn.Module):
         self.conv2.bias = copy.deepcopy(prevModel.conv2.bias)
         self.fc1.weight = copy.deepcopy(prevModel.fc1.weight)
         self.fc1.bias = copy.deepcopy(prevModel.fc1.bias)
-        self.fc2.weight[:self.n_classes - globals.CLASSES_PER_ITER-1] = copy.deepcopy(prevModel.fc2.weight)
-        self.fc2.bias[:self.n_classes - globals.CLASSES_PER_ITER-1] = copy.deepcopy(prevModel.fc2.bias)
+        self.fc2.weight[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc2.weight)
+        self.fc2.bias[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc2.bias)
         self.fisher_information = {}
         self.estimated_means = {}
         self.prev_embedding_centers = prevModel.prev_embedding_centers
