@@ -17,9 +17,10 @@ from training_utils import (batch_compute_saliency_maps,
                             calculate_nonzero_percentage, 
                             create_nonzero_mask,
                             create_zero_mask,
-                            update_EWC_data,
+                            store_additional_data,
                             calc_ewc_loss,
                             apply_mask_to_gradients,
+                            store_test_embedding_centers,
                             CenterLoss)
 
 from augmenting_dataloader import AugmentedOODTrainset
@@ -73,7 +74,7 @@ def train_model(net,
     if center_loss > 0:
         centerLoss = CenterLoss(num_classes=(CLASSES_PER_ITER+globals.OOD_CLASS)*ITERATIONS, feat_dim=net.n_embeddings, use_gpu=True)
         if freezeCenterLossCenters is not None:
-            pc = torch.stack(net.prev_embedding_centers)
+            pc = torch.stack(net.prev_train_embedding_centers)
             for k, t in enumerate(pc):
                 #print("setting", k)
                 centerLoss.centers.data[k] = t
@@ -147,7 +148,8 @@ def train_model(net,
                 break
         if save_path:
             torch.save(net.state_dict(), save_path)
-        update_EWC_data(net, trainloader.dataset, 1) # update fisher information, etc
+        store_additional_data(net, trainloader.dataset, 1) # update fisher information, etc
+        store_test_embedding_centers(net, 1)
 
 def train_model_CL(net, 
                    prevModel, 
@@ -258,7 +260,7 @@ def train_model_CL(net,
     centerLossLr = 0.005
     if center_loss > 0:
         if freezeCenterLossCenters is not None:
-            pc = torch.stack(net.prev_embedding_centers)
+            pc = torch.stack(net.prev_train_embedding_centers)
             ind = 0 # must account for OOD class centers
             for k, t in enumerate(pc):
                 #print("setting", ind)
@@ -344,7 +346,7 @@ def train_model_CL(net,
                     interCenterMask = labels != (ood_label + labels_offset)
                 else:
                     interCenterMask = torch.ones_like(labels, dtype=torch.bool)
-                for emb_center in net.prev_embedding_centers:
+                for emb_center in net.prev_train_embedding_centers:
                     _distance_loss = _distance_loss - distance_loss*torch.sum(torch.norm(embeddings[interCenterMask] - emb_center, dim=1))/inputs.shape[0]
                 epochDistanceLoss += _distance_loss.item()
                 loss = loss + _distance_loss
@@ -482,7 +484,8 @@ def train_model_CL(net,
             print('\n')
         if breakCondition:
             break
-    update_EWC_data(net, trainloader.dataset, iteration+1)
+    store_additional_data(net, trainloader.dataset, iteration+1)
+    store_test_embedding_centers(net, iteration+1)
 
     if verbose:
-        plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, net.prev_embedding_centers)
+        plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, net.prev_train_embedding_centers)

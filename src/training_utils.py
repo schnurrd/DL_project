@@ -233,7 +233,10 @@ def apply_mask_to_gradients(model, masks):
                 # Only allow gradient updates where the mask is zero
                 param.grad *= (1 - masks[name])
                 
-def update_EWC_data(model, dataset, iter, batch_size = 20):
+def store_additional_data(model, dataset, iter, batch_size = 20):
+    '''
+    Stores stuff like estimated fisher matrices for some losses, centers of embeddings on training data, etc 
+    '''
     if iter == 0:
         raise Exception("Iteration must be greater than 0!")
     named_params = {name: param for name, param in model.named_parameters()} # convert iterator to dict
@@ -260,15 +263,30 @@ def update_EWC_data(model, dataset, iter, batch_size = 20):
         log_likelihoods.append(output[range(len(target)), target])
 
     log_likelihood = torch.cat(log_likelihoods).mean()
-    if len(model.prev_embedding_centers) < iter*globals.CLASSES_PER_ITER:
+    if len(model.prev_train_embedding_centers) < iter*globals.CLASSES_PER_ITER:
         for c in non_ood_classes:
             embeddings_per_class[c] = torch.cat(embeddings_per_class[c]).mean(dim=0)
-            model.prev_embedding_centers.append(embeddings_per_class[c].to(globals.DEVICE))
+            model.prev_train_embedding_centers.append(embeddings_per_class[c].to(globals.DEVICE))
     grad_log_likelihood = autograd.grad(log_likelihood, model.parameters())
     names = [name for name, _ in named_params.items()]
     for name, param in zip(names, grad_log_likelihood):
         model.fisher_information[name] = (model.fisher_information[name] + (param.data.clone() ** 2).to(globals.DEVICE))
         model.estimated_means[name] = (named_params[name].data.clone()).to(globals.DEVICE)
+
+def store_test_embedding_centers(model, iter):
+    embeddings_per_class = {}
+    non_ood_classes = [j for j in range(globals.CLASSES_PER_ITER*(iter-1), globals.CLASSES_PER_ITER*(iter))]
+    for c in non_ood_classes:
+        embeddings_per_class[c] = []
+    for data, target in globals.testloaders[iter-1]:
+        data, target = data.to(globals.DEVICE), target.to(globals.DEVICE)
+        _, embeddings = model.get_pred_and_embeddings(data)
+        for c in non_ood_classes:
+            embeddings_per_class[c].append(embeddings[target == c].detach())
+    if len(model.prev_test_embedding_centers) < iter*globals.CLASSES_PER_ITER:
+        for c in non_ood_classes:
+            embeddings_per_class[c] = torch.cat(embeddings_per_class[c]).mean(dim=0)
+            model.prev_test_embedding_centers.append(embeddings_per_class[c].to(globals.DEVICE))
 
 def calc_ewc_loss(model):
     loss = torch.tensor(0.0, requires_grad = True)

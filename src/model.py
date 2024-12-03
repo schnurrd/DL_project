@@ -57,7 +57,8 @@ class Net(nn.Module):
         self.fc2 = nn.Linear(self.n_embeddings, n_classes)
         self.fisher_information = {}
         self.estimated_means = {}
-        self.prev_embedding_centers = []
+        self.prev_train_embedding_centers = []
+        self.prev_test_embedding_centers = []
         for name, param in self.named_parameters():
             self.fisher_information[name] = torch.zeros_like(param).to(globals.DEVICE)
             self.estimated_means[name] = torch.zeros_like(param).to(globals.DEVICE)
@@ -112,7 +113,8 @@ class Net(nn.Module):
         self.fc2.bias[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc2.bias)
         self.fisher_information = {}
         self.estimated_means = {}
-        self.prev_embedding_centers = prevModel.prev_embedding_centers
+        self.prev_train_embedding_centers = prevModel.prev_train_embedding_centers
+        self.prev_test_embedding_centers = prevModel.prev_test_embedding_centers
         self.n_embeddings = prevModel.n_embeddings
 
         for name, param in self.named_parameters():
