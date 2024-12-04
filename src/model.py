@@ -30,14 +30,15 @@ class RandomSquareDropout(nn.Module):
         return img * mask
     
 class Net(nn.Module):
-    def __init__(self, n_classes, withDropout = False):
+    def __init__(self, n_classes):
+        withDropout = globals.WITH_DROPOUT
         super(Net, self).__init__()
         self.n_classes = n_classes
         if withDropout:
+            print("WITH DROPOUT!")
             self.imgdr = RandomSquareDropout(8)
         else:
             self.imgdr = nn.Identity()
-        self.imgdr = nn.Dropout(0.2)
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3)
         if withDropout:
             self.dr1 = nn.Dropout(0.2)

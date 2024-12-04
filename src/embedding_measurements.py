@@ -84,4 +84,4 @@ def measure_embedding_drift(embeddings, labels, prev_embedding_centers):
         distance = np.linalg.norm(center - _prev_embedding_centers[i])
         drifts.append(distance)
     drifts = np.array(drifts)
-    return drifts.mean()
+    return float(drifts.mean())
