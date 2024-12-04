@@ -35,7 +35,6 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.n_classes = n_classes
         if withDropout:
-            print("WITH DROPOUT!")
             self.imgdr = RandomSquareDropout(8)
         else:
             self.imgdr = nn.Identity()
