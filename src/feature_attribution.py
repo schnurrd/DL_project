@@ -4,6 +4,7 @@ import random
 import copy
 from pytorch_utils import get_features, get_labels
 import torch
+import matplotlib.pyplot as plt
 
 #[Denis] added class:
 class Feature_Importance_Evaluations:
@@ -20,6 +21,7 @@ class Feature_Importance_Evaluations:
         self.Test_Datasets_Features=[]
         self.Test_Datasets_Labels=[]
         self.backgrounds=[]
+        self.after_training_attributions=None
 
         
         samples_per_task= math.ceil(background_samples/len(Test_Datasets))
@@ -82,6 +84,10 @@ class Feature_Importance_Evaluations:
             raise ValueError("Input tensors must have the same shape.")
         
         # Compute the Mean Squared Error
+        tensor1 = torch.exp(tensor1)
+        tensor2 = torch.exp(tensor2)
+        tensor1 = tensor1/torch.sum(tensor1)
+        tensor2 = tensor2/torch.sum(tensor2)
         mse = torch.mean((tensor1 - tensor2) ** 2)
         return mse.item()
         
@@ -155,7 +161,18 @@ class Feature_Importance_Evaluations:
         avg_shapc = torch.mean(torch.tensor(shapc_values))
     
         return avg_shapc.item()
+
+    def _compute_entropy(self, ac_tensor: torch.Tensor):
+
+        flat_tensor = torch.exp(ac_tensor.flatten())
+
+        # Normalize the tensor to sum to 1
+        flat_tensor = flat_tensor / flat_tensor.sum()
         
+        # Compute entropy using Shannon's formula
+        entropy = -(flat_tensor * torch.log(flat_tensor)).sum()
+        return entropy.item()
+                
     def Task_Feature_Attribution(self,CL_model,Task_Num):
         #print("HP3")
         
@@ -164,6 +181,49 @@ class Feature_Importance_Evaluations:
         self.Feature_Attributions[Task_Num]=self._get_Feature_Attribution(Task_Num)
         #print("HP4")
 
+    def Save_Random_Picture_Salency(self,samples_per_label=1,plt_name="Salencymaps.png"):
+
+        images=[]
+        salency_map_before=[]
+        salency_map_after=[]
+        for Task_Num in range(len(self.Test_Datasets_Features)):
+            unique_labels = list(set(self.Test_Datasets_Labels[Task_Num]))
+            for ac_label in unique_labels:
+                found_samples=0
+                while found_samples<samples_per_label:
+                    ac_point=random.randint(0, self.Test_Datasets_Features[Task_Num].shape[0]-1)
+                    if ac_label==self.Test_Datasets_Labels[Task_Num][ac_point]:
+                        images.append(self.Test_Datasets_Features[Task_Num][ac_point].detach().numpy())
+                        salency_map_before.append((self.Feature_Attributions[Task_Num][ac_point]/self.Feature_Attributions[Task_Num][ac_point].max()).detach().numpy())
+                        salency_map_after.append((self.after_training_attributions[Task_Num][ac_point]/self.after_training_attributions[Task_Num][ac_point].max()).detach().numpy())
+                        found_samples+=1
+                        #print(found_samples)
+        
+        n_images = len(images)
+        
+        fig, axs = plt.subplots(3, n_images, figsize=(15, 12))
+        for i in range(n_images):
+            if images[i].ndim == 2: 
+                axs[0, i].imshow(images[i], cmap='gray') 
+            elif images[i].shape[0]==1:
+                axs[0, i].imshow(images[i][0], cmap='gray') 
+            else:  
+                axs[0, i].imshow(images[i]) 
+            axs[0, i].axis('off')  
+        for i in range(n_images):
+            if len(salency_map_after[i].shape)==3:
+                salency_map_after[i]=salency_map_after[i][0]
+            axs[1, i].imshow(salency_map_after[i], cmap='gray') 
+            axs[1, i].axis('off')
+        for i in range(n_images):
+            if len(salency_map_before[i].shape)==3:
+                salency_map_before[i]=salency_map_before[i][0]
+            axs[2, i].imshow(salency_map_before[i], cmap='gray')  
+            axs[2, i].axis('off')
+        
+        plt.tight_layout()
+        plt.savefig(plt_name)
+        plt. close()
 
     def Get_Feature_Change_Score(self,CL_model,threshold=0.5):
         #print("HP5")
@@ -177,9 +237,12 @@ class Feature_Importance_Evaluations:
         after_training_attributions=[]
         attributions_differences=[]
         attributions_differences_mean=[]
+        attributions_entropy=[]
+        attributions_entropy_mean=[]
         for ac_task_num in range(len(self.Feature_Attributions)):
             after_training_attributions.append(self._get_Feature_Attribution(ac_task_num))
             attributions_differences.append([])
+            attributions_entropy.append([])
             for ac_image in range(after_training_attributions[-1].shape[0]):
                 """
                 attributions_differences[-1].append(
@@ -191,13 +254,23 @@ class Feature_Importance_Evaluations:
                 )
                 """
                 attributions_differences[-1].append(
-                    self._calculate_mse(
+                    self._compute_shapc_with_thresholds(
                         self.Feature_Attributions[ac_task_num][ac_image],
+                        after_training_attributions[ac_task_num][ac_image],
+                        keep_percentage=0.5
+                    )
+                )
+                attributions_entropy[-1].append(
+                    self._compute_entropy(
                         after_training_attributions[ac_task_num][ac_image]
                     )
                 )
             attributions_differences_mean.append(sum(attributions_differences[-1])/len(attributions_differences[-1]))
+            attributions_entropy_mean.append(sum(attributions_entropy[-1])/len(attributions_entropy[-1]))
         #print("HP6")
-        return sum(attributions_differences_mean)/len(attributions_differences_mean),attributions_differences_mean
+        attributions_differences_means_mean=sum(attributions_differences_mean)/len(attributions_differences_mean)
+        attributions_entropy_means_mean=sum(attributions_entropy_mean)/len(attributions_entropy_mean)
+        self.after_training_attributions=after_training_attributions
+        return attributions_differences_means_mean,attributions_differences_mean,attributions_entropy_means_mean,attributions_entropy_mean
         
                 
