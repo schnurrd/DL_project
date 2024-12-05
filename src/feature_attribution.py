@@ -5,14 +5,16 @@ import copy
 from pytorch_utils import get_features, get_labels
 import torch
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 
 #[Denis] added class:
 class Feature_Importance_Evaluations:
-    def __init__(self,Test_Datasets, DEVICE, Attribution_Method="GradientShap",background_samples=100):
+    def __init__(self,Test_Datasets, DEVICE, Attribution_Method="Gradients",background_samples=100):
         
         #print("HP1")
 
-        self.supported_attribution_methods=["GradientShap"]
+        self.supported_attribution_methods=["GradientShap","Gradients"]
         if Attribution_Method not in self.supported_attribution_methods:
             raise Exception("The following Attribution Method is not supported: "+Attribution_Method)
             
@@ -48,24 +50,40 @@ class Feature_Importance_Evaluations:
         #print(self.Test_Datasets_Labels[0])
         #print(self.backgrounds.shape)
         #print("HP2")
-            
+
+    def _normalize_tensor(self,ac_ten,abs=True):#Get it into the range of 0 to 1 and summing up to 1
+        #another version could be softmax
+        ac_ten_abs=torch.abs(ac_ten)
+        if abs:
+            ac_ten=ac_ten_abs/ac_ten_abs.sum()
+        else:
+            ac_ten=ac_ten/ac_ten_abs.sum()
+        return ac_ten
+        
     def _preparations_model(self,CL_model):
         self.attribution_model=copy.deepcopy(CL_model).to(self.DEVICE)
         self.attribution_model.eval()
 
         if self.Attribution_Method=="GradientShap":
             self.attribution_model=captum.attr.GradientShap(self.attribution_model)
+        elif self.Attribution_Method=="Gradients":
+            self.attribution_model=captum.attr.Saliency(self.attribution_model)
             
     
     def _get_Feature_Attribution(self,Task_Num):
         ac_Test_Dataset_features=self.Test_Datasets_Features[Task_Num].to(self.DEVICE).requires_grad_()
         ac_Test_Dataset_labels=torch.tensor(self.Test_Datasets_Labels[Task_Num], device=self.DEVICE)
-
-        attribution = self.attribution_model.attribute(inputs=ac_Test_Dataset_features, 
-                                                       baselines=self.backgrounds,
-                                                       target=ac_Test_Dataset_labels,
-                                                       n_samples=10,
-                                                      )
+        if self.Attribution_Method=="GradientShap":
+            attribution = self.attribution_model.attribute(inputs=ac_Test_Dataset_features, 
+                                                           baselines=self.backgrounds,
+                                                           target=ac_Test_Dataset_labels,
+                                                           n_samples=10,
+                                                          )
+        elif self.Attribution_Method=="Gradients":
+            attribution = self.attribution_model.attribute(inputs=ac_Test_Dataset_features, 
+                                                           target=ac_Test_Dataset_labels,
+                                                           abs=False
+                                                          )
         return attribution.to(self.DEVICE)
 
     def _calculate_mse(self, tensor1: torch.Tensor, tensor2: torch.Tensor) -> float:
@@ -84,10 +102,8 @@ class Feature_Importance_Evaluations:
             raise ValueError("Input tensors must have the same shape.")
         
         # Compute the Mean Squared Error
-        tensor1 = torch.exp(tensor1)
-        tensor2 = torch.exp(tensor2)
-        tensor1 = tensor1/torch.sum(tensor1)
-        tensor2 = tensor2/torch.sum(tensor2)
+        tensor1 = self._normalize_tensor(tensor1,abs=False)
+        tensor2 = self._normalize_tensor(tensor2,abs=False)
         mse = torch.mean((tensor1 - tensor2) ** 2)
         return mse.item()
         
@@ -162,15 +178,12 @@ class Feature_Importance_Evaluations:
     
         return avg_shapc.item()
 
-    def _compute_entropy(self, ac_tensor: torch.Tensor):
+    def _compute_entropy(self, ac_tensor: torch.Tensor, eps = 1e-12):
 
-        flat_tensor = torch.exp(ac_tensor.flatten())
-
-        # Normalize the tensor to sum to 1
-        flat_tensor = flat_tensor / flat_tensor.sum()
-        
-        # Compute entropy using Shannon's formula
-        entropy = -(flat_tensor * torch.log(flat_tensor)).sum()
+        flat_tensor = ac_tensor.flatten()
+        flat_tensor = self._normalize_tensor(flat_tensor)
+        flat_tensor_clamp = flat_tensor.clamp(min=eps)  # Replace 0s with eps for numerical stability
+        entropy = -(flat_tensor * torch.log(flat_tensor_clamp)).sum()
         return entropy.item()
                 
     def Task_Feature_Attribution(self,CL_model,Task_Num):
@@ -194,13 +207,15 @@ class Feature_Importance_Evaluations:
                     ac_point=random.randint(0, self.Test_Datasets_Features[Task_Num].shape[0]-1)
                     if ac_label==self.Test_Datasets_Labels[Task_Num][ac_point]:
                         images.append(self.Test_Datasets_Features[Task_Num][ac_point].detach().numpy())
-                        salency_map_before.append((self.Feature_Attributions[Task_Num][ac_point]/self.Feature_Attributions[Task_Num][ac_point].max()).detach().numpy())
-                        salency_map_after.append((self.after_training_attributions[Task_Num][ac_point]/self.after_training_attributions[Task_Num][ac_point].max()).detach().numpy())
+                        salency_map_before.append(self.Feature_Attributions[Task_Num][ac_point].detach().numpy())
+                        salency_map_after.append(self.after_training_attributions[Task_Num][ac_point].detach().numpy())
                         found_samples+=1
                         #print(found_samples)
         
         n_images = len(images)
-        
+        colors = [(0, 0, 1), (0, 0, 0), (1, 0, 0)]  # Blue -> Black -> Red
+        cmap = LinearSegmentedColormap.from_list("BlueBlackRed", colors)
+                
         fig, axs = plt.subplots(3, n_images, figsize=(15, 12))
         for i in range(n_images):
             if images[i].ndim == 2: 
@@ -211,15 +226,21 @@ class Feature_Importance_Evaluations:
                 axs[0, i].imshow(images[i]) 
             axs[0, i].axis('off')  
         for i in range(n_images):
+            norm = TwoSlopeNorm(vmin=np.min(salency_map_after[i]), vcenter=0, vmax=np.max(salency_map_after[i]))
             if len(salency_map_after[i].shape)==3:
                 salency_map_after[i]=salency_map_after[i][0]
-            axs[1, i].imshow(salency_map_after[i], cmap='gray') 
+            im = axs[1, i].imshow(salency_map_after[i], cmap=cmap, norm=norm) 
             axs[1, i].axis('off')
+            # Add a colorbar
+            fig.colorbar(im, ax=axs[1, i], orientation='vertical', fraction=0.046, pad=0.04)
         for i in range(n_images):
+            norm = TwoSlopeNorm(vmin=np.min(salency_map_before[i]), vcenter=0, vmax=np.max(salency_map_before[i]))
             if len(salency_map_before[i].shape)==3:
                 salency_map_before[i]=salency_map_before[i][0]
-            axs[2, i].imshow(salency_map_before[i], cmap='gray')  
+            im = axs[2, i].imshow(salency_map_before[i], cmap=cmap, norm=norm)  
             axs[2, i].axis('off')
+            # Add a colorbar
+            fig.colorbar(im, ax=axs[2, i], orientation='vertical', fraction=0.046, pad=0.04)
         
         plt.tight_layout()
         plt.savefig(plt_name)
@@ -254,10 +275,9 @@ class Feature_Importance_Evaluations:
                 )
                 """
                 attributions_differences[-1].append(
-                    self._compute_shapc_with_thresholds(
+                    self._calculate_mse(
                         self.Feature_Attributions[ac_task_num][ac_image],
-                        after_training_attributions[ac_task_num][ac_image],
-                        keep_percentage=0.5
+                        after_training_attributions[ac_task_num][ac_image]
                     )
                 )
                 attributions_entropy[-1].append(
