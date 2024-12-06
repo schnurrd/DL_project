@@ -185,6 +185,87 @@ class Feature_Importance_Evaluations:
         flat_tensor_clamp = flat_tensor.clamp(min=eps)  # Replace 0s with eps for numerical stability
         entropy = -(flat_tensor * torch.log(flat_tensor_clamp)).sum()
         return entropy.item()
+
+    import torch
+
+    def _compute_rectangle_spread_metric(self,saliency_map):
+        """
+        Compute the total area of the smallest bounding rectangles for each unique saliency value.
+    
+        Args:
+            saliency_map (torch.Tensor): 2D tensor representing the saliency map.
+    
+        Returns:
+            float: Total area of the bounding rectangles.
+        """
+        # Ensure the saliency map is 2D
+        
+    
+        if len(saliency_map.shape)==3:
+            saliency_map=saliency_map[0]
+        saliency_map=self._normalize_tensor(saliency_map)
+            
+        assert len(saliency_map.shape) == 2, "Saliency map must be a 2D tensor"
+        
+        # Find unique saliency values and their pixel coordinates
+        unique_values = torch.sort(saliency_map.flatten()).values.tolist()
+        total_area = 0.0
+        
+        for value in unique_values:
+            # Find indices where the saliency map equals the current value
+            indices = torch.nonzero(saliency_map >= value, as_tuple=False)
+            
+            if indices.size(0) > 0:  # Only process if there are pixels with this value
+                # Get min and max coordinates for bounding rectangle
+                min_y, min_x = torch.min(indices, dim=0).values
+                max_y, max_x = torch.max(indices, dim=0).values
+                #print(indices)
+                #print(min_y, min_x, max_y, max_x)
+                
+                # Compute the area of the bounding rectangle
+                area = (max_y - min_y + 1) * (max_x - min_x + 1)
+                total_area += area.item()
+    
+        return total_area/len(unique_values)
+
+
+    def _compute_spatial_variance(self, saliency_map):
+        """
+        Compute the spatial variance of saliency values.
+    
+        Args:
+            saliency_map (torch.Tensor): 2D tensor representing the saliency map.
+    
+        Returns:
+            float: Spatial variance of the saliency values.
+        """
+        # Ensure the saliency map is 2D
+        if len(saliency_map.shape) == 3:
+            saliency_map = saliency_map[0]
+        normalized_saliency = self._normalize_tensor(saliency_map)
+        
+        assert len(normalized_saliency.shape) == 2, "Saliency map must be a 2D tensor"
+    
+        # Get the height and width of the saliency map
+        height, width = normalized_saliency.shape
+    
+        # Create coordinate grids
+        x_coords = torch.arange(width, dtype=torch.float32, device=normalized_saliency.device)
+        y_coords = torch.arange(height, dtype=torch.float32, device=normalized_saliency.device)
+        grid_x, grid_y = torch.meshgrid(x_coords, y_coords, indexing="xy")
+    
+        # Compute weighted mean (centroid)
+        mu_x = (normalized_saliency * grid_x).sum()
+        mu_y = (normalized_saliency * grid_y).sum()
+    
+        # Compute weighted variance
+        var_x = (normalized_saliency * (grid_x - mu_x) ** 2).sum()
+        var_y = (normalized_saliency * (grid_y - mu_y) ** 2).sum()
+    
+        # Combine variances for total spatial variance
+        spatial_variance = var_x + var_y
+    
+        return spatial_variance.item()
                 
     def Task_Feature_Attribution(self,CL_model,Task_Num):
         #print("HP3")
@@ -216,7 +297,7 @@ class Feature_Importance_Evaluations:
         colors = [(0, 0, 1), (0, 0, 0), (1, 0, 0)]  # Blue -> Black -> Red
         cmap = LinearSegmentedColormap.from_list("BlueBlackRed", colors)
                 
-        fig, axs = plt.subplots(3, n_images, figsize=(15, 12))
+        fig, axs = plt.subplots(3, n_images, figsize=(25, 11))
         for i in range(n_images):
             if images[i].ndim == 2: 
                 axs[0, i].imshow(images[i], cmap='gray') 
@@ -260,10 +341,13 @@ class Feature_Importance_Evaluations:
         attributions_differences_mean=[]
         attributions_entropy=[]
         attributions_entropy_mean=[]
+        attributions_spread=[]
+        attributions_spread_mean=[]
         for ac_task_num in range(len(self.Feature_Attributions)):
             after_training_attributions.append(self._get_Feature_Attribution(ac_task_num))
             attributions_differences.append([])
             attributions_entropy.append([])
+            attributions_spread.append([])
             for ac_image in range(after_training_attributions[-1].shape[0]):
                 """
                 attributions_differences[-1].append(
@@ -285,12 +369,32 @@ class Feature_Importance_Evaluations:
                         after_training_attributions[ac_task_num][ac_image]
                     )
                 )
+                """
+                attributions_spread[-1].append(
+                    self._compute_rectangle_spread_metric(
+                        after_training_attributions[ac_task_num][ac_image]
+                    )
+                )
+                """
+                attributions_spread[-1].append(
+                    self._compute_spatial_variance(
+                        after_training_attributions[ac_task_num][ac_image]
+                    )
+                )
             attributions_differences_mean.append(sum(attributions_differences[-1])/len(attributions_differences[-1]))
             attributions_entropy_mean.append(sum(attributions_entropy[-1])/len(attributions_entropy[-1]))
+            attributions_spread_mean.append(sum(attributions_spread[-1])/len(attributions_spread[-1]))
         #print("HP6")
         attributions_differences_means_mean=sum(attributions_differences_mean)/len(attributions_differences_mean)
         attributions_entropy_means_mean=sum(attributions_entropy_mean)/len(attributions_entropy_mean)
+        attributions_spread_means_mean=sum(attributions_spread_mean)/len(attributions_spread_mean)
         self.after_training_attributions=after_training_attributions
-        return attributions_differences_means_mean,attributions_differences_mean,attributions_entropy_means_mean,attributions_entropy_mean
+        return_list=[attributions_differences_means_mean,
+                     attributions_differences_mean,
+                     attributions_entropy_means_mean,
+                     attributions_entropy_mean,
+                     attributions_spread_means_mean,
+                     attributions_spread_mean]
+        return return_list
         
                 
