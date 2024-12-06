@@ -287,9 +287,9 @@ class Feature_Importance_Evaluations:
                 while found_samples<samples_per_label:
                     ac_point=random.randint(0, self.Test_Datasets_Features[Task_Num].shape[0]-1)
                     if ac_label==self.Test_Datasets_Labels[Task_Num][ac_point]:
-                        images.append(self.Test_Datasets_Features[Task_Num][ac_point].detach().numpy())
-                        salency_map_before.append(self.Feature_Attributions[Task_Num][ac_point].detach().numpy())
-                        salency_map_after.append(self.after_training_attributions[Task_Num][ac_point].detach().numpy())
+                        images.append(self.Test_Datasets_Features[Task_Num][ac_point].detach().cpu().numpy())
+                        salency_map_before.append(self.Feature_Attributions[Task_Num][ac_point].detach().cpu().numpy())
+                        salency_map_after.append(self.after_training_attributions[Task_Num][ac_point].detach().cpu().numpy())
                         found_samples+=1
                         #print(found_samples)
         
