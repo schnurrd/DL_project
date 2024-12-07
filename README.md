@@ -40,6 +40,17 @@ This documentation file, providing an overview of the repository, its files, and
 2. **Running Training**: Use `training.py` to train the model. Update configurations in `globals.py` if necessary.
 3. **Running Experiments**: Open `experiment.ipynb` for interactive experiments.
 
+## Notes Regarding Orthogonal Gradient Descent
+
+Notes from the authors in their paper:
+- OGD-GTL slightly outperforms OGD_AVE and OGD-ALL
+- They chose batch size 10 and a learning rate of 10^-3
+- Network is a three-layer MLP with 100 hidden units in two layers and 10 logit outputs. Every layer except the final one uses ReLU activation. The loss is Softmax cross-entropy, and the optimizer is stochastic gradient descent.
+- Storage size for their experiments was set to 200
+
+Notes on my implementation:
+- I implemented the OGD-GTL variant
+
 ## Contribution
 Feel free to contribute to the project by creating issues or submitting pull requests.
 

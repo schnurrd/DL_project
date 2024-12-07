@@ -22,6 +22,7 @@ from training_utils import (batch_compute_saliency_maps,
                             apply_mask_to_gradients,
                             store_test_embedding_centers,
                             CenterLoss)
+from ogd import OrthogonalGradientDescent
 
 from augmenting_dataloader import AugmentedOODTrainset
 from visualizations import plot_embeddings, plot_confusion_matrix
@@ -47,7 +48,8 @@ def train_model(net,
                 l1_loss = 0, 
                 center_loss = 0,
                 freezeCenterLossCenters = None,
-                stopOnLoss = 0.03
+                stopOnLoss = 0.03,
+                ogd = False,
                 ):
     """
     Used to train on first task of CL.
@@ -70,6 +72,9 @@ def train_model(net,
     criterion = nn.CrossEntropyLoss()
     net = net.to(DEVICE)
     lr = 0.001
+    
+    params = list(net.parameters())
+    
     centerLossLr = 0.005
     if center_loss > 0:
         centerLoss = CenterLoss(num_classes=(CLASSES_PER_ITER+globals.OOD_CLASS)*ITERATIONS, feat_dim=net.n_embeddings, use_gpu=True)
@@ -78,10 +83,13 @@ def train_model(net,
             for k, t in enumerate(pc):
                 #print("setting", k)
                 centerLoss.centers.data[k] = t
-        params = list(net.parameters()) + list(centerLoss.parameters())
+        params += list(centerLoss.parameters())
+    
+    if ogd:
+        optimizer = OrthogonalGradientDescent(net, optim.SGD(params, lr=lr, momentum=0.9), device=DEVICE)
+    else:    
         optimizer = optim.SGD(params, lr=lr, momentum=0.9)#, weight_decay = 0.001)
-    else:
-        optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9)#, weight_decay = 0.001)
+        
     model_path = load_path
     if model_path and os.path.isfile(model_path):
         # load trained model parameters from disk
@@ -144,8 +152,9 @@ def train_model(net,
                 print("Validation loss", val_epoch_loss)
                 print("Fraction of nonzero parameters", calculate_nonzero_percentage(net), '\n')
             if stopOnLoss is not None and epochCELoss < stopOnLoss:
-            #if False:
                 break
+        if ogd:
+            optimizer.update_basis(trainloader.dataset)
         if save_path:
             torch.save(net.state_dict(), save_path)
         store_additional_data(net, trainloader.dataset, 1) # update fisher information, etc
@@ -175,6 +184,7 @@ def train_model_CL(net,
                    stopOnLoss = 0.03,
                    stopOnValAcc = None,
                    timeout=None,
+                   ogd = False,
                    ):
     """
     Parameters:
@@ -251,12 +261,14 @@ def train_model_CL(net,
     
     trainloader = DataLoader(ds, batch_size=globals.BATCH_SIZE, shuffle=True, pin_memory=True, num_workers=0)
 
-    net, prevModel = net.to(DEVICE), prevModel.to(DEVICE)
+    net, prevModel = net.to(DEVICE), prevModel.to(DEVICE) 
     prevModel.eval()
 
     ceLoss = nn.CrossEntropyLoss()
     klDivLoss = nn.KLDivLoss(reduction="batchmean")
 
+    params = list(net.parameters())
+    
     centerLossLr = 0.005
     if center_loss > 0:
         if freezeCenterLossCenters is not None:
@@ -268,11 +280,13 @@ def train_model_CL(net,
                 ind  += 1
                 if globals.OOD_CLASS == 1 and (k+1)%CLASSES_PER_ITER == 0:
                     ind += 1
-        params = list(net.parameters()) + list(centerLoss.parameters())
-        optimizer = optim.SGD(params, lr=lr, momentum=momentum)#, weight_decay = 0.001)
+        params += list(centerLoss.parameters())
+        
+    if ogd:
+        optimizer = OrthogonalGradientDescent(net, optim.SGD(params, lr=lr, momentum=momentum), device=DEVICE)
     else:
-        optimizer = optim.SGD(net.parameters(), lr=lr, momentum=momentum)#, weight_decay = 0.001)
-    #optimizer = optim.Adam(net.parameters(), lr=0.001)
+        optimizer = optim.SGD(params, lr=lr, momentum=momentum)#, weight_decay = 0.001)
+        
     prevModel.eval()
     epoch = 0
     if freeze_nonzero_params:
@@ -486,6 +500,8 @@ def train_model_CL(net,
             break
     store_additional_data(net, trainloader.dataset, iteration+1)
     store_test_embedding_centers(net, iteration+1)
+    if ogd:
+        optimizer.update_basis(trainloader.dataset)
 
     if verbose:
         plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, net.prev_train_embedding_centers)
