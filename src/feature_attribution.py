@@ -188,7 +188,7 @@ class Feature_Importance_Evaluations:
 
     import torch
 
-    def _compute_rectangle_spread_metric(self,saliency_map):
+    def _compute_rectangle_spread_metric(self,saliency_map_mc):
         """
         Compute the total area of the smallest bounding rectangles for each unique saliency value.
     
@@ -200,36 +200,40 @@ class Feature_Importance_Evaluations:
         """
         # Ensure the saliency map is 2D
         
-    
-        if len(saliency_map.shape)==3:
-            saliency_map=saliency_map[0]
-        saliency_map=self._normalize_tensor(saliency_map)
-            
-        assert len(saliency_map.shape) == 2, "Saliency map must be a 2D tensor"
         
-        # Find unique saliency values and their pixel coordinates
-        unique_values = torch.sort(saliency_map.flatten()).values.tolist()
-        total_area = 0.0
-        
-        for value in unique_values:
-            # Find indices where the saliency map equals the current value
-            indices = torch.nonzero(saliency_map >= value, as_tuple=False)
-            
-            if indices.size(0) > 0:  # Only process if there are pixels with this value
-                # Get min and max coordinates for bounding rectangle
-                min_y, min_x = torch.min(indices, dim=0).values
-                max_y, max_x = torch.max(indices, dim=0).values
-                #print(indices)
-                #print(min_y, min_x, max_y, max_x)
+        if len(saliency_map_mc.shape)==2:
+            saliency_map_mc=torch.unsqueeze(saliency_map_mc, 0)
+
+        final_result_arr=[]
+        for i in range(saliency_map_mc.shape[0]):
+            saliency_map=saliency_map_mc[i]
+            saliency_map=self._normalize_tensor(saliency_map)
                 
-                # Compute the area of the bounding rectangle
-                area = (max_y - min_y + 1) * (max_x - min_x + 1)
-                total_area += area.item()
-    
-        return total_area/len(unique_values)
+            assert len(saliency_map.shape) == 2, "Saliency map must be a 2D tensor"
+            
+            # Find unique saliency values and their pixel coordinates
+            unique_values = torch.sort(saliency_map.flatten()).values.tolist()
+            total_area = 0.0
+            
+            for value in unique_values:
+                # Find indices where the saliency map equals the current value
+                indices = torch.nonzero(saliency_map >= value, as_tuple=False)
+                
+                if indices.size(0) > 0:  # Only process if there are pixels with this value
+                    # Get min and max coordinates for bounding rectangle
+                    min_y, min_x = torch.min(indices, dim=0).values
+                    max_y, max_x = torch.max(indices, dim=0).values
+                    #print(indices)
+                    #print(min_y, min_x, max_y, max_x)
+                    
+                    # Compute the area of the bounding rectangle
+                    area = (max_y - min_y + 1) * (max_x - min_x + 1)
+                    total_area += area.item()
+            final_result_arr.append(total_area/len(unique_values))
+        return sum(final_result_arr)/len(final_result_arr)
 
 
-    def _compute_spatial_variance(self, saliency_map):
+    def _compute_spatial_variance(self, saliency_map_mc):
         """
         Compute the spatial variance of saliency values.
     
@@ -239,33 +243,38 @@ class Feature_Importance_Evaluations:
         Returns:
             float: Spatial variance of the saliency values.
         """
-        # Ensure the saliency map is 2D
-        if len(saliency_map.shape) == 3:
-            saliency_map = saliency_map[0]
-        normalized_saliency = self._normalize_tensor(saliency_map)
         
-        assert len(normalized_saliency.shape) == 2, "Saliency map must be a 2D tensor"
-    
-        # Get the height and width of the saliency map
-        height, width = normalized_saliency.shape
-    
-        # Create coordinate grids
-        x_coords = torch.arange(width, dtype=torch.float32, device=normalized_saliency.device)
-        y_coords = torch.arange(height, dtype=torch.float32, device=normalized_saliency.device)
-        grid_x, grid_y = torch.meshgrid(x_coords, y_coords, indexing="xy")
-    
-        # Compute weighted mean (centroid)
-        mu_x = (normalized_saliency * grid_x).sum()
-        mu_y = (normalized_saliency * grid_y).sum()
-    
-        # Compute weighted variance
-        var_x = (normalized_saliency * (grid_x - mu_x) ** 2).sum()
-        var_y = (normalized_saliency * (grid_y - mu_y) ** 2).sum()
-    
-        # Combine variances for total spatial variance
-        spatial_variance = var_x + var_y
-    
-        return spatial_variance.item()
+        if len(saliency_map_mc.shape)==2:
+            saliency_map_mc=torch.unsqueeze(saliency_map_mc, 0)
+
+        final_result_arr=[]
+        for i in range(saliency_map_mc.shape[0]):
+            # Ensure the saliency map is 2D
+            saliency_map = saliency_map_mc[i]
+            normalized_saliency = self._normalize_tensor(saliency_map)
+            
+            assert len(normalized_saliency.shape) == 2, "Saliency map must be a 2D tensor"
+        
+            # Get the height and width of the saliency map
+            height, width = normalized_saliency.shape
+        
+            # Create coordinate grids
+            x_coords = torch.arange(width, dtype=torch.float32, device=normalized_saliency.device)
+            y_coords = torch.arange(height, dtype=torch.float32, device=normalized_saliency.device)
+            grid_x, grid_y = torch.meshgrid(x_coords, y_coords, indexing="xy")
+        
+            # Compute weighted mean (centroid)
+            mu_x = (normalized_saliency * grid_x).sum()
+            mu_y = (normalized_saliency * grid_y).sum()
+        
+            # Compute weighted variance
+            var_x = (normalized_saliency * (grid_x - mu_x) ** 2).sum()
+            var_y = (normalized_saliency * (grid_y - mu_y) ** 2).sum()
+        
+            # Combine variances for total spatial variance
+            spatial_variance = var_x + var_y
+            final_result_arr.append(spatial_variance.item())
+        return sum(final_result_arr)/len(final_result_arr)
                 
     def Task_Feature_Attribution(self,CL_model,Task_Num):
         #print("HP3")
@@ -296,7 +305,9 @@ class Feature_Importance_Evaluations:
         n_images = len(images)
         colors = [(0, 0, 1), (0, 0, 0), (1, 0, 0)]  # Blue -> Black -> Red
         cmap = LinearSegmentedColormap.from_list("BlueBlackRed", colors)
-                
+        if len(images[0].shape)==3 and images[0].shape[0]>1:
+            print("Warning: The salency graphs are the average over the channels")
+        
         fig, axs = plt.subplots(3, n_images, figsize=(25, 11))
         for i in range(n_images):
             if images[i].ndim == 2: 
@@ -309,7 +320,7 @@ class Feature_Importance_Evaluations:
         for i in range(n_images):
             norm = TwoSlopeNorm(vmin=np.min(salency_map_after[i]), vcenter=0, vmax=np.max(salency_map_after[i]))
             if len(salency_map_after[i].shape)==3:
-                salency_map_after[i]=salency_map_after[i][0]
+                salency_map_after[i]=salency_map_after[i].mean(axis=0)
             im = axs[1, i].imshow(salency_map_after[i], cmap=cmap, norm=norm) 
             axs[1, i].axis('off')
             # Add a colorbar
@@ -317,7 +328,7 @@ class Feature_Importance_Evaluations:
         for i in range(n_images):
             norm = TwoSlopeNorm(vmin=np.min(salency_map_before[i]), vcenter=0, vmax=np.max(salency_map_before[i]))
             if len(salency_map_before[i].shape)==3:
-                salency_map_before[i]=salency_map_before[i][0]
+                salency_map_before[i]=salency_map_before[i].mean(axis=0)
             im = axs[2, i].imshow(salency_map_before[i], cmap=cmap, norm=norm)  
             axs[2, i].axis('off')
             # Add a colorbar
