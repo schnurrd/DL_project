@@ -112,7 +112,7 @@ class Net(nn.Module):
         self.fc1.bias = copy.deepcopy(prevModel.fc1.bias)
         self.fc2.weight[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc2.weight)
         self.fc2.bias[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc2.bias)
-         # set them to zero
+        
         self.fisher_information = {}
         self.estimated_means = {}
         self.prev_train_embedding_centers = prevModel.prev_train_embedding_centers
