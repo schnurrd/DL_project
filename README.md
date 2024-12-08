@@ -40,6 +40,28 @@ This documentation file, providing an overview of the repository, its files, and
 2. **Running Training**: Use `training.py` to train the model. Update configurations in `globals.py` if necessary.
 3. **Running Experiments**: Open `experiment.ipynb` for interactive experiments.
 
+## Notes Regarding Orthogonal Gradient Descent
+
+Notes from the authors in their paper:
+- OGD-GTL slightly outperforms OGD_AVE and OGD-ALL
+- They chose batch size 10 and a learning rate of 10^-3
+- Network is a three-layer MLP with 100 hidden units in two layers and 10 logit outputs. Every layer except the final one uses ReLU activation. The loss is Softmax cross-entropy, and the optimizer is stochastic gradient descent.
+- Storage size for their experiments was set to 200
+
+Notes on my implementation:
+- I implemented the OGD-GTL variant
+- Default is with a storage size of 200 random sample gradients per task (max_basis_size=200)
+- Default is to let the buffer grow over the different tasks (reduce_basis=False) 
+
+**Comparison** (Performance averaged across 10 runs,GPT build table from comments inside my ogd pull request so don't trust it 100% but I checked most of the values and everything seems to be correct):
+| Configuration                               | Averaged SHAPC (↓)       | Mean Accuracy (±Std)     | Mean Total Confusion (±Std) | Mean Intra-Phase Confusion (±Std) | Mean Per-Task Confusion (±Std) | Mean Embedding Drift (±Std)    | Mean Attention Drift (±Std)         | Mean Attention Spread (±Std)    |
+|---------------------------------------------|---------------------------|--------------------------|-----------------------------|-----------------------------------|--------------------------------|--------------------------------|--------------------------------------|--------------------------------|
+| Baseline                                    | 2.5670e-06               | 0.65348 (0.03111)        | 0.43270 (0.01230)          | 0.43021 (0.01218)                 | 0.06989 (0.00539)              | 5.3576 (0.31395)               | 2.3871e-06 (2.2904e-07)              | 48.08096 (1.00881)             |
+| Baseline 2                         | 2.5680e-06               | 0.60748 (0.04958)        | 0.43732 (0.01030)          | 0.43479 (0.01012)                 | 0.07184 (0.00535)              | 5.60164 (0.31787)              | 2.3885e-06 (2.0199e-07)              | 47.54174 (1.43070)             |
+| Baseline 3                                  | 2.5982e-06               | 0.61216 (0.05226)        | 0.43230 (0.00965)          | 0.42976 (0.00979)                 | 0.07000 (0.00375)              | 5.49204 (0.27083)              | 2.4421e-06 (1.8576e-07)              | 47.56774 (1.38656)             |
+| With ogd & reduce_basis=True                | 1.8457e-06               | 0.65065 (0.03858)        | 0.41011 (0.00955)          | 0.40792 (0.00934)                 | 0.06131 (0.00320)              | 5.05795 (0.33517)              | 1.9036e-06 (2.2346e-07)              | 49.76607 (1.61156)             |
+| With ogd & reduce_basis=False               | 9.5078e-07               | 0.74067 (0.02976)        | 0.39415 (0.01151)          | 0.39172 (0.01134)                 | 0.06067 (0.00327)              | 4.07636 (0.22955)              | 1.0181e-06 (1.2154e-07)              | 53.35429 (1.77690)             |
+| With ogd & reduce_basis=False (2nd exec.)   | 1.0607e-06               | 0.72012 (0.02208)        | 0.40270 (0.00962)          | 0.40020 (0.00944)                 | 0.06201 (0.00424)              | 4.20050 (0.21273)              | 1.0651e-06 (1.4154e-07)              | 51.04283 (1.99993)             |
 ## Contribution
 Feel free to contribute to the project by creating issues or submitting pull requests.
 

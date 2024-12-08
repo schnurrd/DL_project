@@ -59,6 +59,7 @@ class Net(nn.Module):
         self.estimated_means = {}
         self.prev_train_embedding_centers = []
         self.prev_test_embedding_centers = []
+        self.ogd_basis = torch.empty((0, 0), device=globals.DEVICE)
         for name, param in self.named_parameters():
             self.fisher_information[name] = torch.zeros_like(param).to(globals.DEVICE)
             self.estimated_means[name] = torch.zeros_like(param).to(globals.DEVICE)
@@ -111,11 +112,21 @@ class Net(nn.Module):
         self.fc1.bias = copy.deepcopy(prevModel.fc1.bias)
         self.fc2.weight[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc2.weight)
         self.fc2.bias[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc2.bias)
+        
         self.fisher_information = {}
         self.estimated_means = {}
         self.prev_train_embedding_centers = prevModel.prev_train_embedding_centers
         self.prev_test_embedding_centers = prevModel.prev_test_embedding_centers
         self.n_embeddings = prevModel.n_embeddings
+        self.ogd_basis = copy.deepcopy(prevModel.ogd_basis)
+        
+        self.old_param_size_map = {}
+        pointer = 0
+        for name, param in prevModel.named_parameters():
+            param_size = param.numel()
+            end_idx = pointer + param_size
+            self.old_param_size_map[name] = param_size
+            pointer = end_idx
 
         for name, param in self.named_parameters():
             if prevModel.fisher_information[name].shape == param.shape:
