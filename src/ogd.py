@@ -63,7 +63,7 @@ class OrthogonalGradientDescent:
         num_to_sample = min(self.max_basis_size, num_samples)
         sampled_indices = torch.randperm(num_samples)[:num_to_sample]
 
-        for idx, (inputs, labels) in enumerate(dataloader):
+        for idx, (inputs, labels) in enumerate(dataloader):  # might make sense to batch this
             if idx not in sampled_indices:
                 continue
             inputs, labels = inputs.to(self.device), torch.tensor(
