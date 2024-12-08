@@ -16,7 +16,7 @@ class OrthogonalGradientDescent:
             to project new gradients onto the complement of previously stored directions.
     """
 
-    def __init__(self, model, optimizer, device="cpu", max_basis_size=200):
+    def __init__(self, model, optimizer, device="cpu", max_basis_size=200, reduce_basis=False):
         """
         Args:
             model (nn.Module): The model being optimized. Must have a `model.ogd_basis` attribute,
@@ -34,6 +34,7 @@ class OrthogonalGradientDescent:
             self.model.ogd_basis = torch.empty((0, 0), device=self.device)
 
         self.current_dim = self._get_param_dim()
+        self.reduce_basis = reduce_basis
 
     def update_basis(self, dataloader):
         """
@@ -101,10 +102,9 @@ class OrthogonalGradientDescent:
         else:
             orthonormal_basis = self._orthonormalize(new_basis)
 
-        self._update_param_map()
 
         # Truncate the basis to retain only the most informative vectors by norm
-        if orthonormal_basis.shape[1] > self.max_basis_size:
+        if self.reduce_basis and orthonormal_basis.shape[1] > self.max_basis_size:
             orthonormal_basis = self._truncate_basis_by_norm(orthonormal_basis)
 
         # Update the model's basis
@@ -147,22 +147,6 @@ class OrthogonalGradientDescent:
 
     def zero_grad(self):
         self.optimizer.zero_grad()
-
-    def _update_param_map(self):
-        """
-        Compute and return a parameter map of parameter_name -> (start_idx, end_idx)
-        where start_idx and end_idx define the slice of the flattened vector corresponding to that parameter.
-        """
-        param_map = {}
-        pointer = 0
-        for name, param in self.model.named_parameters():
-            if param.requires_grad:
-                param_size = param.numel()
-                start_idx = pointer
-                end_idx = pointer + param_size
-                param_map[name] = (start_idx, end_idx)
-                pointer = end_idx
-        self.pram_map = param_map
 
     # Utility methods for parameter management
     def _parameters_to_grad_vector(self, parameters):
