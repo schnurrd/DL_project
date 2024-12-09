@@ -16,7 +16,7 @@ class OrthogonalGradientDescent:
             to project new gradients onto the complement of previously stored directions.
     """
 
-    def __init__(self, model, optimizer, device="cpu", max_basis_size=200, reduce_basis=False):
+    def __init__(self, model, optimizer, device="cpu", max_basis_size=50, reduce_basis=False):
         """
         Args:
             model (nn.Module): The model being optimized. Must have a `model.ogd_basis` attribute,
@@ -72,7 +72,9 @@ class OrthogonalGradientDescent:
 
             # Forward pass and compute gradient for each sample
             self.optimizer.zero_grad()
+            self.model.eval()
             outputs = self.model(inputs)
+            self.model.train()
             # Extract ground truth logits
             gt_logits = outputs.gather(
                 1, labels.view(-1, 1)
