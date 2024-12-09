@@ -268,10 +268,10 @@ def train_model_CL(net,
         ds.display_ood_samples()
     elif globals.ood_method == 'smoothmixs':
         ds = SmoothMixOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER, mask_type = 'S')
-        ds.display_ood_samples
+        ds.display_ood_samples()
     elif globals.ood_method == 'smoothmixc':
         ds = SmoothMixOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER, mask_type = 'C')
-        ds.display_ood_samples
+        ds.display_ood_samples()
     else:
         ds = CutMixOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER, centered = True)
     
