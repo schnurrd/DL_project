@@ -62,7 +62,6 @@ def train_model(net,
     DEVICE = globals.DEVICE
     ITERATIONS = globals.ITERATIONS
     trainloaders = globals.trainloaders
-
     if not globals.ood_method:
         ds = trainloaders[0].dataset
     elif globals.ood_method == 'fmix':

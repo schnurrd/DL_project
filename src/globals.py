@@ -17,4 +17,24 @@ testset = None
 trainloaders = None
 valloaders = None
 testloaders = None
-ood_method = 'smoothmixc' 
+OOD_CLASS = 0
+ood_method = 'smoothmixc'
+
+def toggle_OOD(method = 'smoothmixc'):
+    '''
+    supported methods:
+    smoothmixc
+    smoothmixs
+    cutmix
+    fmix
+    '''
+    global OOD_CLASS
+    global ood_method
+    OOD_CLASS = 1
+    ood_method = method
+
+def disable_OOD():
+    global OOD_CLASS
+    global ood_method
+    OOD_CLASS = 0
+    ood_method = None
