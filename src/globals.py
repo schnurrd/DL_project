@@ -4,7 +4,7 @@ ITERATIONS = 5
 CLASSES_PER_ITER = 2
 SEED = 42
 VAR_INFERENCE = False
-BATCH_SIZE = 4
+BATCH_SIZE = 40
 WITH_DROPOUT = False
 DEVICE = (
     torch.device("mps") if torch.backends.mps.is_available() else
