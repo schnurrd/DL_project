@@ -335,8 +335,12 @@ class SmoothMixOODTrainset(Dataset):
     def __generate_square_mask(self):
         H, W = self.shape
 
-        center_x = random.randint(0, W)
-        center_y = random.randint(0, H)
+        if self.centered:
+            center_x = random.randint(0, W // 2) + W // 4
+            center_y = random.randint(0, H // 2) + H // 4
+        else:
+            center_x = random.randint(0, W)
+            center_y = random.randint(0, H)
         width = random.uniform(0.2, 0.5) * W  # Random square width
         height = random.uniform(0.2, 0.5) * H  # Random square height
 
