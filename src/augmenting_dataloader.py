@@ -102,7 +102,7 @@ class CutMixOODTrainset(Dataset):
             return ood_image, self.ood_label
 
 class FMixOODTrainset(Dataset):
-    def __init__(self, iteration, num_ood_samples, alpha=0.7, decay_power=2, max_soft=0.0):
+    def __init__(self, iteration, num_ood_samples, alpha=1, decay_power=2, max_soft=0.0):
         """
         FMix Dataset for Out-of-Distribution Data Augmentation.
 
@@ -281,6 +281,135 @@ class FMixOODTrainset(Dataset):
         else:
             ood_image, _ = self.__random_fmix()
             return ood_image, self.ood_label
+
+class SmoothMixOODTrainset(Dataset):
+    def __init__(self, iteration, num_ood_samples, mask_type='S', centered = False, max_soft=1.0):
+        """
+        SmoothMix Dataset for Out-of-Distribution Data Augmentation.
+
+        Args:
+            iteration (int): Current iteration.
+            num_ood_samples (int): Number of OOD samples to generate.
+            mask_type (str): 'S' for square mask, 'C' for circular mask.
+            max_soft (float): Softening value between 0 and 0.5 for mask edges.
+        """
+        self.iteration = iteration
+        self.num_ood_samples = num_ood_samples
+        self.mask_type = mask_type
+        self.max_soft = max_soft
+        self.centered = centered
+
+        self.ood_label = (iteration + 1) * globals.CLASSES_PER_ITER
+        self.original_length = len(globals.trainloaders[iteration].dataset)
+        self.trainloader = globals.trainloaders[iteration].dataset
+        self.indices = [globals.trainset.indices[i] for i in globals.trainloaders[iteration].dataset.indices]
+        self.shape = self.trainloader[0][0].shape[1:]  # Infer size from the dataset images
+        self.class_groups = self.__group_by_class()
+
+    def __group_by_class(self):
+        class_groups = {}
+        for image, label in self.trainloader:
+            if label not in class_groups:
+                class_groups[label] = []
+            class_groups[label].append(image)
+        return class_groups
+
+    def __random_smoothmix(self):
+        label1, label2 = random.sample(list(self.class_groups.keys()), 2)
+        image1 = self.class_groups[label1][random.randint(0, len(self.class_groups[label1]) - 1)]
+        image2 = self.class_groups[label2][random.randint(0, len(self.class_groups[label2]) - 1)]
+
+        # Generate SmoothMix mask and mixed image
+        mask = self.__generate_mask()
+        smoothmix_image = image1 * mask + image2 * (1 - mask)
+        return smoothmix_image, mask
+
+    def __generate_mask(self):
+        if self.mask_type == 'S':
+            return self.__generate_square_mask()
+        elif self.mask_type == 'C':
+            return self.__generate_circular_mask()
+        else:
+            raise ValueError("Invalid mask_type. Choose 'S' for square or 'C' for circular.")
+
+    def __generate_square_mask(self):
+        H, W = self.shape
+
+        center_x = random.randint(0, W)
+        center_y = random.randint(0, H)
+        width = random.uniform(0.2, 0.5) * W  # Random square width
+        height = random.uniform(0.2, 0.5) * H  # Random square height
+
+        x = np.arange(W)
+        y = np.arange(H)
+        xx, yy = np.meshgrid(x, y)
+
+        dist_x = np.maximum(0, np.abs(xx - center_x) - width / 2)
+        dist_y = np.maximum(0, np.abs(yy - center_y) - height / 2)
+
+        mask = np.maximum(0, 1 - (dist_x + dist_y) / self.max_soft)
+
+        return torch.tensor(mask, dtype=torch.float32).unsqueeze(0)
+
+    def __generate_circular_mask(self):
+        H, W = self.shape
+
+        if self.centered:
+            center_x = random.randint(0, W // 2) + W // 4
+            center_y = random.randint(0, H // 2) + H // 4
+        else:
+            center_x = random.randint(0, W)
+            center_y = random.randint(0, H)
+
+        sigma = random.uniform(0.25, 0.4) * max(H, W)
+
+        x = np.arange(W)
+        y = np.arange(H)
+        xx, yy = np.meshgrid(x, y)
+
+        dist_squared = (xx - center_x) ** 2 + (yy - center_y) ** 2
+
+        mask = np.exp(-dist_squared / (2 * sigma ** 2))
+
+        return torch.tensor(mask, dtype=torch.float32).unsqueeze(0)
+
+    def display_ood_samples(self, num_samples=20, filename="smoothmix_ood_samples.png"):
+        fig, axes = plt.subplots(2, num_samples, figsize=(num_samples * 3, 6))  # Two rows: images and masks
+        for i in range(num_samples):
+            if num_samples == 1:
+                ax_img = axes[0]
+                ax_mask = axes[1]
+            else:
+                ax_img = axes[0, i]
+                ax_mask = axes[1, i]
+
+            # Generate SmoothMix image and mask
+            smoothmix_image, mask = self.__random_smoothmix()
+
+            # Display SmoothMix image
+            ax_img.imshow(smoothmix_image.permute(1, 2, 0).cpu().numpy())  # Adjust for tensor format
+            ax_img.axis('off')
+            ax_img.set_title("SmoothMix Image")
+
+            # Display SmoothMix mask
+            ax_mask.imshow(mask.squeeze().cpu().numpy(), cmap='gray')  # Grayscale mask
+            ax_mask.axis('off')
+            ax_mask.set_title("SmoothMix Mask")
+
+        plt.tight_layout()
+        plt.savefig(filename)
+        plt.close(fig)
+
+    def __len__(self):
+        return self.num_ood_samples + self.original_length
+
+    def __getitem__(self, index):
+        if index < self.original_length:
+            return globals.full_trainset[self.indices[index]]
+        else:
+            ood_image, _ = self.__random_smoothmix()
+            return ood_image, self.ood_label
+
 
 
 class AugmentedOODTrainset(Dataset):

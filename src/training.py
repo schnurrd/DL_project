@@ -24,7 +24,7 @@ from training_utils import (batch_compute_saliency_maps,
                             CenterLoss)
 from ogd import OrthogonalGradientDescent
 
-from augmenting_dataloader import AugmentedOODTrainset, CutMixOODTrainset, FMixOODTrainset
+from augmenting_dataloader import AugmentedOODTrainset, CutMixOODTrainset, FMixOODTrainset, SmoothMixOODTrainset
 from visualizations import plot_embeddings, plot_confusion_matrix
 from image_utils import show_image
 
@@ -67,6 +67,12 @@ def train_model(net,
         ds = trainloaders[0].dataset
     elif globals.ood_method == 'fmix':
         ds = FMixOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER)
+        ds.display_ood_samples()
+    elif globals.ood_method == 'smoothmixs':
+        ds = SmoothMixOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER, mask_type = 'S')
+        ds.display_ood_samples()
+    elif globals.ood_method == 'smoothmixc':
+        ds = SmoothMixOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER, mask_type = 'C')
         ds.display_ood_samples()
     else:
         ds = CutMixOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER, centered = True)
@@ -261,6 +267,12 @@ def train_model_CL(net,
     elif globals.ood_method == 'fmix':
         ds = FMixOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER)
         ds.display_ood_samples()
+    elif globals.ood_method == 'smoothmixs':
+        ds = SmoothMixOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER, mask_type = 'S')
+        ds.display_ood_samples
+    elif globals.ood_method == 'smoothmixc':
+        ds = SmoothMixOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER, mask_type = 'C')
+        ds.display_ood_samples
     else:
         ds = CutMixOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER, centered = True)
     

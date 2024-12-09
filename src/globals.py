@@ -17,4 +17,4 @@ testset = None
 trainloaders = None
 valloaders = None
 testloaders = None
-ood_method = 'fmix' 
+ood_method = 'smoothmixc' 
