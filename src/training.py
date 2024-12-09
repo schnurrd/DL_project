@@ -24,7 +24,7 @@ from training_utils import (batch_compute_saliency_maps,
                             CenterLoss)
 from ogd import OrthogonalGradientDescent
 
-from augmenting_dataloader import AugmentedOODTrainset
+from augmenting_dataloader import AugmentedOODTrainset, CutMixOODTrainset, FMixOODTrainset
 from visualizations import plot_embeddings, plot_confusion_matrix
 from image_utils import show_image
 
@@ -63,10 +63,13 @@ def train_model(net,
     ITERATIONS = globals.ITERATIONS
     trainloaders = globals.trainloaders
 
-    if globals.OOD_CLASS == 1:
-        ds = AugmentedOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER)
-    else:
+    if not globals.ood_method:
         ds = trainloaders[0].dataset
+    elif globals.ood_method == 'fmix':
+        ds = FMixOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER)
+        ds.display_ood_samples()
+    else:
+        ds = CutMixOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER, centered = True)
     trainloader = DataLoader(ds, batch_size=globals.BATCH_SIZE, shuffle=True, pin_memory=True, num_workers=0)
     
     criterion = nn.CrossEntropyLoss()
@@ -253,11 +256,13 @@ def train_model_CL(net,
     trainloaders = globals.trainloaders
     valloaders = globals.valloaders
 
-    if globals.OOD_CLASS == 1:
-        ood_label = (iteration+1)*CLASSES_PER_ITER
-        ds = AugmentedOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER)
-    else:
+    if not globals.ood_method:
         ds = trainloaders[iteration].dataset
+    elif globals.ood_method == 'fmix':
+        ds = FMixOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER)
+        ds.display_ood_samples()
+    else:
+        ds = CutMixOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER, centered = True)
     
     trainloader = DataLoader(ds, batch_size=globals.BATCH_SIZE, shuffle=True, pin_memory=True, num_workers=0)
 

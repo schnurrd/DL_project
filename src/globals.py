@@ -17,4 +17,4 @@ testset = None
 trainloaders = None
 valloaders = None
 testloaders = None
-OOD_CLASS = 1 # 1 if training with an additional "out of distribution class" with random data. 0 otherwise
+ood_method = 'fmix' 
