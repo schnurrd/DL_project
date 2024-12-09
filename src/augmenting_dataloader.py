@@ -74,7 +74,7 @@ class CutMixOODTrainset(Dataset):
 
         return self.__cutmix(image1, image2)
     
-    def display_ood_samples(self, num_samples=20, filename="ood_samples.png"):
+    def display_ood_samples(self, num_samples=20, filename="cutmix_ood_samples.png"):
         """
         Save the first num_samples OOD samples to a file.
         """
