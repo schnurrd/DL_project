@@ -53,7 +53,7 @@ Notes on my implementation:
 - Default is with a storage size of 200 random sample gradients per task (max_basis_size=200)
 - Default is to let the buffer grow over the different tasks (reduce_basis=False) 
 
-**Comparison** (Performance averaged across 10 runs,GPT build table from comments inside my ogd pull request so don't trust it 100% but I checked most of the values and everything seems to be correct):
+**Comparison** (Performance averaged across 10 runs, with full_CE false, GPT build table from comments inside my ogd pull request so don't trust it 100% but I checked most of the values and everything seems to be correct):
 | Configuration                               | Averaged SHAPC (↓)       | Mean Accuracy (±Std)     | Mean Total Confusion (±Std) | Mean Intra-Phase Confusion (±Std) | Mean Per-Task Confusion (±Std) | Mean Embedding Drift (±Std)    | Mean Attention Drift (±Std)         | Mean Attention Spread (±Std)    |
 |---------------------------------------------|---------------------------|--------------------------|-----------------------------|-----------------------------------|--------------------------------|--------------------------------|--------------------------------------|--------------------------------|
 | Baseline                                    | 2.5670e-06               | 0.65348 (0.03111)        | 0.43270 (0.01230)          | 0.43021 (0.01218)                 | 0.06989 (0.00539)              | 5.3576 (0.31395)               | 2.3871e-06 (2.2904e-07)              | 48.08096 (1.00881)             |
