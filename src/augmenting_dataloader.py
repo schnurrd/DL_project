@@ -102,17 +102,17 @@ class CutMixOODTrainset(Dataset):
             return ood_image, self.ood_label
 
 class JigsawOODTrainset(Dataset):
-    def __init__(self, iteration, num_ood_samples, num_patches = 16, random_patches = False):
+    def __init__(self, iteration, num_ood_samples, num_tiles = 4, random_patches = False):
         """
         Args:
             iteration (int): The current iteration index.
             num_ood_samples (int): Number of Jigsaw OOD samples to generate.
-            num_patches (int): Number of patches to divide the image into (default: 9).
+            num_tiles (int): The number of tiles to divide each row/column.
             random_patches: If true, the number of patches that the image is divided in will be randomly chosen
         """
         self.iteration = iteration
         self.num_ood_samples = num_ood_samples
-        self.num_tiles = int(np.sqrt(num_patches))
+        self.num_tiles = num_tiles 
 
         self.original_length = len(globals.trainloaders[iteration].dataset)
         self.trainloader = globals.trainloaders[iteration].dataset
