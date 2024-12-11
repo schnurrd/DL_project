@@ -127,7 +127,7 @@ class JigsawOODTrainset(Dataset):
         self.num_tiles_random = []
 
         if random_patches:
-            for tiles in [x for x in range(4, int(np.sqrt(min(self.shape[0], self.shape[1]))))]:
+            for tiles in [x for x in range(2, int(np.sqrt(min(self.shape[0], self.shape[1]))))]:
                 if self.shape[0] / tiles == self.shape[0] // tiles and self.shape[1] / tiles == self.shape[1] // tiles:
                     self.num_tiles_random.append(tiles)
 
