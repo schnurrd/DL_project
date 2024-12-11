@@ -11,12 +11,14 @@ DEVICE = (
     torch.device("cuda:0") if torch.cuda.is_available() else
     torch.device("cpu")
 )
+EXPERIMENT_N_RUNS = 10
 full_trainset = None
 trainset = None
 testset = None
 trainloaders = None
 valloaders = None
 testloaders = None
+val_set_size = 0
 OOD_CLASS = 0
 ood_method = 'jigsaw'
 

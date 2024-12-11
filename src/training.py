@@ -29,12 +29,6 @@ from visualizations import plot_embeddings, plot_confusion_matrix
 from image_utils import show_image
 
 centerLoss = None
-def build_buffer_data(inputs, labels, model, ood_label):
-    #masked_images = mask_region_with_low_saliency(model, inputs, labels, 14)
-    saliency_maps = batch_compute_saliency_maps(model, inputs, labels)
-    masked_images = mask_top_n_saliency_regions_batch(inputs, saliency_maps, 2, 10)
-    #return masked_images, torch.full_like(labels, ood_label)
-    return masked_images, labels
 
 def train_model(net, 
                 trainloader, 
@@ -142,26 +136,29 @@ def train_model(net,
             if timeout is not None and time.time() - start > timeout:
                 raise Exception("initial train timed out!")
             
-            net.eval()
-            for inputs, labels in valloader:
-                with torch.no_grad():
-                    inputs = inputs.to(DEVICE)
-                    labels = labels.to(DEVICE)
-                    outputs = net(inputs)
-                    loss = criterion(outputs, labels)
-                    val_epoch_loss += loss.item()
-                    optimizer.zero_grad()
-            net.train()
-            
-            val_epoch_loss /= len(valloader)
+            if globals.val_set_size != 0:
+                net.eval()
+                for inputs, labels in valloader:
+                    with torch.no_grad():
+                        inputs = inputs.to(DEVICE)
+                        labels = labels.to(DEVICE)
+                        outputs = net(inputs)
+                        loss = criterion(outputs, labels)
+                        val_epoch_loss += loss.item()
+                        optimizer.zero_grad()
+                net.train()
+                
+                if len(valloader) > 0:
+                    val_epoch_loss /= len(valloader)
 
             epochCELoss /= len(trainloader)
             epoch_center_loss /= (len(trainloader))
 
             if verbose and epoch%report_frequency == 0:
                 print(f"Epoch {epoch}, CE Loss: {epochCELoss:.4f}, center loss: {epoch_center_loss:.4f}")
-                print("Validation loss", val_epoch_loss)
                 print("Fraction of nonzero parameters", calculate_nonzero_percentage(net), '\n')
+                if globals.val_set_size != 0:
+                    print("Validation loss", val_epoch_loss)
             if stopOnLoss is not None and epochCELoss < stopOnLoss:
                 break
         if ogd:
@@ -263,7 +260,7 @@ def train_model_CL(net,
     DEVICE = globals.DEVICE
     trainloaders = globals.trainloaders
     valloaders = globals.valloaders
-
+    ood_label = (iteration+1)*globals.CLASSES_PER_ITER
     if not globals.ood_method:
         ds = trainloaders[iteration].dataset
     elif globals.ood_method == 'fmix':
@@ -424,74 +421,76 @@ def train_model_CL(net,
                     print("clipped gradients!", prevNorm)
             
             optimizer.step()
-            
-        net.eval()
-        predicted_eval_task = []
-        task_val_labels = []
-        for inputs, labels in valloader:
-            with torch.no_grad():
-                inputs = inputs.to(DEVICE)
-                labels = labels.to(DEVICE)
-                #saliency_maps = batch_compute_saliency_maps(net, inputs, labels)
-                    
-                # Mask high-saliency regions in a batch manner
-                #masked_images = mask_top_n_saliency_regions_batch(inputs, saliency_maps, 2, 8)
-                outputs = net(inputs)
-                outputsNoDropout = outputs
-                oldClassOutputs = outputsNoDropout[:, :-CLASSES_PER_ITER-globals.OOD_CLASS]
-                with torch.no_grad():
-                    prevOutputs = prevModel(inputs)
-                loss = ceLoss(outputs[:,-CLASSES_PER_ITER-globals.OOD_CLASS:], labels - iteration*CLASSES_PER_ITER)
-                CELoss = loss.item()
-                val_epochCELoss += CELoss
-                #for it in range(iteration):
-                #    loss += klDivLoss(F.log_softmax(oldClassOutputs[:, it*CLASSES_PER_ITER:(it+1)*CLASSES_PER_ITER], dim=-1), F.softmax(prevOutputs[:, it*CLASSES_PER_ITER:(it+1)*CLASSES_PER_ITER], dim=-1))
-                loss += klDivLoss(F.log_softmax(oldClassOutputs, dim=-1), F.softmax(prevOutputs, dim=-1))
-                val_epochKDLoss += loss.item() - CELoss
-                if globals.OOD_CLASS == 1:
-                    outputs_no_OOD = outputs[:, [i for i in range(outputs.size(1)) if (i + 1) % (CLASSES_PER_ITER+1) != 0]]
-                else:
-                    outputs_no_OOD = outputs
-                _, predicted = torch.max(outputs_no_OOD, 1)
-                predicted_eval_task.extend(predicted.cpu().numpy())
-                task_val_labels.extend(labels.cpu().numpy())
-                optimizer.zero_grad()
 
         if timeout is not None and time.time() - start > timeout:
             raise Exception("CL train timed out!")
-        
-        correct = sum(p == t for p, t in zip(predicted_eval_task, task_val_labels))
-        task_val_accuracy = correct / len(task_val_labels)
-        if validateOnAll:
+        if globals.val_set_size != 0:
             net.eval()
-            with torch.no_grad():
-                predicted_full = []
-                all_val_labels = []
-                all_val_embeddings = []
-                for k in range(iteration+1):
-                    for feat, lab in valloaders[k]:
-                        feat, lab = feat.to(DEVICE), lab.to(DEVICE)
+            predicted_eval_task = []
+            task_val_labels = []
+            for inputs, labels in valloader:
+                with torch.no_grad():
+                    inputs = inputs.to(DEVICE)
+                    labels = labels.to(DEVICE)
+                    #saliency_maps = batch_compute_saliency_maps(net, inputs, labels)
                         
-                        # Get the model's predictions
-                        outputs = net(feat)
-                        embeddings = net.get_embeddings(feat)
-                        
-                        if globals.OOD_CLASS == 1:
-                            outputs = outputs[:, [i for i in range(outputs.size(1)) if (i + 1) % (CLASSES_PER_ITER+1) != 0]]
-                        _, predicted = torch.max(outputs, 1)  # Assuming it's a classification task
-                        
-                        # Accumulate predictions and labels
-                        predicted_full.extend(predicted.cpu().numpy())  # Move to CPU and convert to numpy for ease
-                        all_val_labels.extend(lab.cpu().numpy())
-                        all_val_embeddings.extend(embeddings.cpu().numpy())
-                correct = sum(p == t for p, t in zip(predicted_full, all_val_labels))
-                total_val_accuracy = correct / len(all_val_labels)
-                all_val_labels = np.array(all_val_labels)
-                all_val_embeddings = np.array(all_val_embeddings)
+                    # Mask high-saliency regions in a batch manner
+                    #masked_images = mask_top_n_saliency_regions_batch(inputs, saliency_maps, 2, 8)
+                    outputs = net(inputs)
+                    outputsNoDropout = outputs
+                    oldClassOutputs = outputsNoDropout[:, :-CLASSES_PER_ITER-globals.OOD_CLASS]
+                    with torch.no_grad():
+                        prevOutputs = prevModel(inputs)
+                    loss = ceLoss(outputs[:,-CLASSES_PER_ITER-globals.OOD_CLASS:], labels - iteration*CLASSES_PER_ITER)
+                    CELoss = loss.item()
+                    val_epochCELoss += CELoss
+                    #for it in range(iteration):
+                    #    loss += klDivLoss(F.log_softmax(oldClassOutputs[:, it*CLASSES_PER_ITER:(it+1)*CLASSES_PER_ITER], dim=-1), F.softmax(prevOutputs[:, it*CLASSES_PER_ITER:(it+1)*CLASSES_PER_ITER], dim=-1))
+                    loss += klDivLoss(F.log_softmax(oldClassOutputs, dim=-1), F.softmax(prevOutputs, dim=-1))
+                    val_epochKDLoss += loss.item() - CELoss
+                    if globals.OOD_CLASS == 1:
+                        outputs_no_OOD = outputs[:, [i for i in range(outputs.size(1)) if (i + 1) % (CLASSES_PER_ITER+1) != 0]]
+                    else:
+                        outputs_no_OOD = outputs
+                    _, predicted = torch.max(outputs_no_OOD, 1)
+                    predicted_eval_task.extend(predicted.cpu().numpy())
+                    task_val_labels.extend(labels.cpu().numpy())
+                    optimizer.zero_grad()
+        
+            correct = sum(p == t for p, t in zip(predicted_eval_task, task_val_labels))
+            task_val_accuracy = correct / len(task_val_labels)
+            if validateOnAll:
+                net.eval()
+                with torch.no_grad():
+                    predicted_full = []
+                    all_val_labels = []
+                    all_val_embeddings = []
+                    for k in range(iteration+1):
+                        for feat, lab in valloaders[k]:
+                            feat, lab = feat.to(DEVICE), lab.to(DEVICE)
+                            
+                            # Get the model's predictions
+                            outputs = net(feat)
+                            embeddings = net.get_embeddings(feat)
+                            
+                            if globals.OOD_CLASS == 1:
+                                outputs = outputs[:, [i for i in range(outputs.size(1)) if (i + 1) % (CLASSES_PER_ITER+1) != 0]]
+                            _, predicted = torch.max(outputs, 1)  # Assuming it's a classification task
+                            
+                            # Accumulate predictions and labels
+                            predicted_full.extend(predicted.cpu().numpy())  # Move to CPU and convert to numpy for ease
+                            all_val_labels.extend(lab.cpu().numpy())
+                            all_val_embeddings.extend(embeddings.cpu().numpy())
+                    correct = sum(p == t for p, t in zip(predicted_full, all_val_labels))
+                    total_val_accuracy = correct / len(all_val_labels)
+                    all_val_labels = np.array(all_val_labels)
+                    all_val_embeddings = np.array(all_val_embeddings)
+                net.train()
             net.train()
-        net.train()
-        val_epochCELoss /= len(valloader)
-        val_epochKDLoss /= len(valloader)
+
+            if len(valloader) > 0:
+                val_epochCELoss /= len(valloader)
+                val_epochKDLoss /= len(valloader)
 
         epochCELoss /= len(trainloader)
         epochL1Loss /= len(trainloader)
@@ -510,13 +509,14 @@ def train_model_CL(net,
         #breakCondition = task_val_accuracy > 0.925
         if verbose and epoch%report_frequency == 0:
             print("Epoch", epoch, f" CELoss: {epochCELoss:.4f}, KLLoss: {epochKDLoss:.4f}, L1Loss: {epochL1Loss:.4f}, EWCLoss: {epochEWCLoss:.4f}, CenterLoss: {epochCenterLoss:.4f}, InterCenterLoss: {epochDistanceLoss:.4f}, ParamReuseLoss: {epochParamReuseLoss:.4f}")
-            print("Validation losses:", val_epochCELoss, val_epochKDLoss)
-            print("Validation accuracy (for last task)", task_val_accuracy)
             print("Fraction of nonzero parameters", calculate_nonzero_percentage(net))
-            print("Total validation accuracy", total_val_accuracy)
-            if validateOnAll:# and breakCondition:
-                plot_confusion_matrix(predicted_full, all_val_labels, list(range(CLASSES_PER_ITER*(iteration+1))))
-                plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, None)
+            if globals.val_set_size:
+                print("Validation losses:", val_epochCELoss, val_epochKDLoss)
+                print("Validation accuracy (for last task)", task_val_accuracy)
+                print("Total validation accuracy", total_val_accuracy)
+                if validateOnAll:# and breakCondition:
+                    plot_confusion_matrix(predicted_full, all_val_labels, list(range(CLASSES_PER_ITER*(iteration+1))))
+                    plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, None)
             print('\n')
         if breakCondition:
             break
