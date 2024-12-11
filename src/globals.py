@@ -18,15 +18,16 @@ trainloaders = None
 valloaders = None
 testloaders = None
 OOD_CLASS = 0
-ood_method = 'smoothmixc'
+ood_method = 'jigsaw'
 
-def toggle_OOD(method = 'smoothmixc'):
+def toggle_OOD(method = 'jigsaw'):
     '''
     supported methods:
     smoothmixc
     smoothmixs
     cutmix
     fmix
+    jigsaw
     '''
     global OOD_CLASS
     global ood_method

@@ -101,6 +101,96 @@ class CutMixOODTrainset(Dataset):
             ood_image = self.__random_cutmix()
             return ood_image, self.ood_label
 
+class JigsawOODTrainset(Dataset):
+    def __init__(self, iteration, num_ood_samples, num_patches = 16, random_patches = False):
+        """
+        Args:
+            iteration (int): The current iteration index.
+            num_ood_samples (int): Number of Jigsaw OOD samples to generate.
+            num_patches (int): Number of patches to divide the image into (default: 9).
+            random_patches: If true, the number of patches that the image is divided in will be randomly chosen
+        """
+        self.iteration = iteration
+        self.num_ood_samples = num_ood_samples
+        self.num_tiles = int(np.sqrt(num_patches))
+
+        self.original_length = len(globals.trainloaders[iteration].dataset)
+        self.trainloader = globals.trainloaders[iteration].dataset
+        self.indices = [globals.trainset.indices[i] for i in globals.trainloaders[iteration].dataset.indices]
+        self.ood_label = (iteration + 1) * globals.CLASSES_PER_ITER
+        self.shape = self.trainloader[0][0].shape[1:]
+        self.random_patches = random_patches
+
+        assert self.shape[0] / self.num_tiles == self.shape[0] // self.num_tiles 
+        assert self.shape[1] / self.num_tiles == self.shape[1] // self.num_tiles 
+
+        self.num_tiles_random = []
+
+        if random_patches:
+            for tiles in [x for x in range(4, int(np.sqrt(min(self.shape[0], self.shape[1]))))]:
+                if self.shape[0] / tiles == self.shape[0] // tiles and self.shape[1] / tiles == self.shape[1] // tiles:
+                    self.num_tiles_random.append(tiles)
+
+
+    def __generate_jigsaw(self, image):
+        image = np.array(image)
+
+        num_tiles = self.num_tiles
+        if self.random_patches:
+            num_tiles = random.choice(self.num_tiles_random)
+
+        _, H, W = image.shape
+        tile_h, tile_w = H // num_tiles, W // num_tiles
+        tiles = []
+
+        for i in range(num_tiles):
+            for j in range(num_tiles):
+                tile = image[:, i * tile_h:(i + 1) * tile_h, j * tile_w:(j + 1) * tile_w]
+                tiles.append(tile)
+
+        identity_permutation = np.arange(len(tiles))
+        while True:
+            permutation = np.random.permutation(len(tiles))
+            if not np.array_equal(permutation, identity_permutation):
+                break
+        permutation = np.random.permutation(len(tiles))
+        permuted_tiles = [tiles[permutation[t]] for t in range(len(tiles))]
+        permuted_image = np.block([[permuted_tiles[i * num_tiles + j] for j in range(num_tiles)]
+                                    for i in range(num_tiles)])
+
+        return torch.tensor(permuted_image)
+    
+    def __random_jigsaw(self):
+        image, _ = self.trainloader[random.randint(0, self.num_ood_samples - 1)]
+        return self.__generate_jigsaw(image)
+
+    def display_ood_samples(self, num_samples=20, filename="jigsaw_samples.png"):
+        """
+        Save the first num_samples OOD samples to a file.
+        """
+        fig, axes = plt.subplots(1, num_samples, figsize=(num_samples * 3, 3))
+        for i in range(num_samples):
+            if num_samples == 1:
+                ax = axes
+            else:
+                ax = axes[i]
+
+            image = self.__random_jigsaw()
+            ax.imshow(image.permute(1, 2, 0).cpu().numpy())  # Adjust as necessary for your tensor format
+            ax.axis('off')
+        plt.tight_layout()
+        plt.savefig(filename)  # Save the figure to a file
+        plt.close(fig)  # Close the figure to free memory
+
+    def __len__(self):
+        return self.num_ood_samples + self.original_length
+
+    def __getitem__(self, index):
+        if index < self.original_length:
+            return globals.full_trainset[self.indices[index]]
+        else:
+            return self.__random_jigsaw(), self.ood_label
+
 class FMixOODTrainset(Dataset):
     def __init__(self, iteration, num_ood_samples, alpha=1, decay_power=2, max_soft=0.0):
         """
@@ -123,7 +213,7 @@ class FMixOODTrainset(Dataset):
         self.original_length = len(globals.trainloaders[iteration].dataset)
         self.trainloader = globals.trainloaders[iteration].dataset
         self.indices = [globals.trainset.indices[i] for i in globals.trainloaders[iteration].dataset.indices]
-        self.shape = self.trainloader[0][0].shape[1:]  # Infer size from the dataset images
+        self.shape = self.trainloader[0][0].shape[1:]
         self.class_groups = self.__group_by_class()
 
     def __group_by_class(self):
@@ -391,7 +481,7 @@ class SmoothMixOODTrainset(Dataset):
             smoothmix_image, mask = self.__random_smoothmix()
 
             # Display SmoothMix image
-            ax_img.imshow(smoothmix_image.permute(1, 2, 0).cpu().numpy())  # Adjust for tensor format
+            ax_img.imshow(smoothmix_image.permute(1, 2, 0).cpu().numpy(), cmap = 'gray')  # Adjust for tensor format
             ax_img.axis('off')
             ax_img.set_title("SmoothMix Image")
 
