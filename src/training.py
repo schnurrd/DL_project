@@ -24,7 +24,7 @@ from training_utils import (batch_compute_saliency_maps,
                             CenterLoss)
 from ogd import OrthogonalGradientDescent
 
-from augmenting_dataloader import AugmentedOODTrainset, CutMixOODTrainset, FMixOODTrainset, SmoothMixOODTrainset
+from augmenting_dataloader import AugmentedOODTrainset, CutMixOODTrainset, FMixOODTrainset, SmoothMixOODTrainset, JigsawOODTrainset
 from visualizations import plot_embeddings, plot_confusion_matrix
 from image_utils import show_image
 
@@ -72,6 +72,9 @@ def train_model(net,
         ds.display_ood_samples()
     elif globals.ood_method == 'smoothmixc':
         ds = SmoothMixOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER, mask_type = 'C')
+        ds.display_ood_samples()
+    elif globals.ood_method == 'jigsaw':
+        ds = JigsawOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER)
         ds.display_ood_samples()
     else:
         ds = CutMixOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER, centered = True)
@@ -271,6 +274,9 @@ def train_model_CL(net,
         ds.display_ood_samples()
     elif globals.ood_method == 'smoothmixc':
         ds = SmoothMixOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER, mask_type = 'C')
+        ds.display_ood_samples()
+    elif globals.ood_method == 'jigsaw':
+        ds = JigsawOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER)
         ds.display_ood_samples()
     else:
         ds = CutMixOODTrainset(iteration, len(trainloaders[iteration].dataset)//CLASSES_PER_ITER, centered = True)
