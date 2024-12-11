@@ -150,7 +150,6 @@ def train_model(net,
                 
                 if len(valloader) > 0:
                     val_epoch_loss /= len(valloader)
-
             epochCELoss /= len(trainloader)
             epoch_center_loss /= (len(trainloader))
 
@@ -162,7 +161,7 @@ def train_model(net,
             if stopOnLoss is not None and epochCELoss < stopOnLoss:
                 break
         if ogd:
-            optimizer.update_basis(trainloader.dataset)
+            optimizer.update_basis(trainloaders[0].dataset)
         if save_path:
             torch.save(net.state_dict(), save_path)
         store_additional_data(net, trainloader.dataset, 1) # update fisher information, etc
@@ -510,7 +509,7 @@ def train_model_CL(net,
         if verbose and epoch%report_frequency == 0:
             print("Epoch", epoch, f" CELoss: {epochCELoss:.4f}, KLLoss: {epochKDLoss:.4f}, L1Loss: {epochL1Loss:.4f}, EWCLoss: {epochEWCLoss:.4f}, CenterLoss: {epochCenterLoss:.4f}, InterCenterLoss: {epochDistanceLoss:.4f}, ParamReuseLoss: {epochParamReuseLoss:.4f}")
             print("Fraction of nonzero parameters", calculate_nonzero_percentage(net))
-            if globals.val_set_size:
+            if globals.val_set_size != 0:
                 print("Validation losses:", val_epochCELoss, val_epochKDLoss)
                 print("Validation accuracy (for last task)", task_val_accuracy)
                 print("Total validation accuracy", total_val_accuracy)
@@ -523,7 +522,7 @@ def train_model_CL(net,
     store_additional_data(net, trainloader.dataset, iteration+1)
     store_test_embedding_centers(net, iteration+1)
     if ogd:
-        optimizer.update_basis(trainloader.dataset)
+        optimizer.update_basis(trainloaders[iteration].dataset)
 
-    if verbose:
+    if verbose and globals.val_set_size != 0:
         plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, net.prev_train_embedding_centers)

@@ -186,6 +186,8 @@ class JigsawOODTrainset(Dataset):
         return self.num_ood_samples + self.original_length
 
     def __getitem__(self, index):
+        if index >= len(self):
+            raise IndexError("Index out of range")
         if index < self.original_length:
             return globals.full_trainset[self.indices[index]]
         else:
