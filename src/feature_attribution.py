@@ -389,7 +389,7 @@ class Feature_Importance_Evaluations:
                 """
                 attributions_spread[-1].append(
                     self._compute_spatial_variance(
-                        self.Feature_Attributions[ac_task_num][ac_image] #after_training_attributions[ac_task_num][ac_image]
+                        after_training_attributions[ac_task_num][ac_image] #after_training_attributions[ac_task_num][ac_image]
                     )
                 )
             attributions_differences_mean.append(sum(attributions_differences[-1])/len(attributions_differences[-1]))

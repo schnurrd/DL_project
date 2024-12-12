@@ -11,7 +11,7 @@ DEVICE = (
     torch.device("cuda:0") if torch.cuda.is_available() else
     torch.device("cpu")
 )
-EXPERIMENT_N_RUNS = 10
+EXPERIMENT_N_RUNS = 20
 full_trainset = None
 trainset = None
 testset = None

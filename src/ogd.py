@@ -62,7 +62,6 @@ class OrthogonalGradientDescent:
         # Limit the number of gradients to self.max_basis_size
         num_to_sample = min(self.max_basis_size, num_samples)
         sampled_indices = torch.randperm(num_samples)[:num_to_sample]
-
         for idx, (inputs, labels) in enumerate(dataloader):  # might make sense to batch this
             if idx not in sampled_indices:
                 continue
@@ -91,7 +90,6 @@ class OrthogonalGradientDescent:
                 1
             )  # Column vector
             sampled_gradients.append(grad_vec)
-
         if not sampled_gradients:
             self.optimizer.zero_grad()
             return
