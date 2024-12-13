@@ -102,7 +102,6 @@ class OrthogonalGradientDescent:
         else:
             orthonormal_basis = self._orthonormalize(new_basis)
 
-
         # Truncate the basis to retain only the most informative vectors by norm
         if self.reduce_basis and orthonormal_basis.shape[1] > self.max_basis_size:
             orthonormal_basis = self._truncate_basis_by_norm(orthonormal_basis)
