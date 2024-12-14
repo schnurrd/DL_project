@@ -138,16 +138,24 @@ def train_model(net,
             
             if globals.val_set_size != 0:
                 net.eval()
+                predicted_full = []
+                all_val_labels = []
                 for inputs, labels in valloader:
                     with torch.no_grad():
                         inputs = inputs.to(DEVICE)
                         labels = labels.to(DEVICE)
                         outputs = net(inputs)
+                        if globals.OOD_CLASS == 1:
+                            outputs = outputs[:, [i for i in range(outputs.size(1)) if (i + 1) % (CLASSES_PER_ITER+1) != 0]]
+                        _, predicted = torch.max(outputs, 1)
                         loss = criterion(outputs, labels)
                         val_epoch_loss += loss.item()
                         optimizer.zero_grad()
+                        predicted_full.extend(predicted.cpu().numpy())  # Move to CPU and convert to numpy for ease
+                        all_val_labels.extend(labels.cpu().numpy())
                 net.train()
-                
+                correct = sum(p == t for p, t in zip(predicted_full, all_val_labels))
+                total_val_accuracy = correct / len(all_val_labels)
                 if len(valloader) > 0:
                     val_epoch_loss /= len(valloader)
             epochCELoss /= len(trainloader)
@@ -155,9 +163,9 @@ def train_model(net,
 
             if verbose and epoch%report_frequency == 0:
                 print(f"Epoch {epoch}, CE Loss: {epochCELoss:.4f}, center loss: {epoch_center_loss:.4f}")
-                print("Fraction of nonzero parameters", calculate_nonzero_percentage(net), '\n')
+                print("Fraction of nonzero parameters", calculate_nonzero_percentage(net))
                 if globals.val_set_size != 0:
-                    print("Validation loss", val_epoch_loss)
+                    print("Validation loss", val_epoch_loss, "validation accuracy", total_val_accuracy, '\n')
             if stopOnLoss is not None and epochCELoss < stopOnLoss:
                 break
         if ogd:
@@ -469,8 +477,7 @@ def train_model_CL(net,
                             feat, lab = feat.to(DEVICE), lab.to(DEVICE)
                             
                             # Get the model's predictions
-                            outputs = net(feat)
-                            embeddings = net.get_embeddings(feat)
+                            outputs, embeddings = net.get_pred_and_embeddings(feat)
                             
                             if globals.OOD_CLASS == 1:
                                 outputs = outputs[:, [i for i in range(outputs.size(1)) if (i + 1) % (CLASSES_PER_ITER+1) != 0]]

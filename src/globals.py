@@ -18,9 +18,10 @@ testset = None
 trainloaders = None
 valloaders = None
 testloaders = None
-val_set_size = 0
+val_set_size = 0.02
 OOD_CLASS = 0
 ood_method = 'jigsaw'
+dataset = 'tiny_imagenet' # supported are 'mnist' and 'tiny_imagenet'
 
 def toggle_OOD(method = 'jigsaw'):
     '''
