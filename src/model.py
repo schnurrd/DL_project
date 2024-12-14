@@ -137,37 +137,49 @@ class MnistCNN(nn.Module):
                 self.fisher_information[name] = new_fisher.to(globals.DEVICE)
                 self.estimated_means[name] = new_means.to(globals.DEVICE)
 
-class TinyImageNetCNN(nn.Module):
+class TinyImageNetCNN(nn.Module): # Modified AlexNet https://github.com/DennisHanyuanXu/Tiny-ImageNet
     def __init__(self, n_classes):
         super(TinyImageNetCNN, self).__init__()
         withDropout = globals.WITH_DROPOUT
+
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1)  # Input: (3, 64, 64), Output: (64, 64, 64)
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)  # Output: (128, 64, 64)
+        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)  # Output: (256, 32, 32)
+        self.conv4 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)  # Output: (256, 32, 32)
+        self.conv5 = nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1)  # Output: (512, 16, 16)
+        self.conv6 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)  # Output: (512, 16, 16)
+
         if withDropout:
             self.imgdr = RandomSquareDropout(21)
+            self.dr1 = nn.Dropout(0.2)
+            self.dr2 = nn.Dropout(0.2)
+            self.dr3 = nn.Dropout(0.2)
+            self.dr4 = nn.Dropout(0.2)
+            self.dr5 = nn.Dropout(0.2)
+            self.dr6 = nn.Dropout(0.2)
         else:
             self.imgdr = nn.Identity()
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
-        if withDropout:
-            self.dr1 = nn.Dropout(0.2)
-        else:
             self.dr1 = nn.Identity()
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        if withDropout:
-            self.dr2 = nn.Dropout(0.2)
-        else:
             self.dr2 = nn.Identity()
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
+            self.dr3 = nn.Identity()
+            self.dr4 = nn.Identity()
+            self.dr5 = nn.Identity()
+            self.dr6 = nn.Identity()
+        # Define pooling layer
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        # Fully connected layers
+        self.fc1 = nn.Linear(512 * 4 * 4, 1024)
+        self.fc2 = nn.Linear(1024, 1024)
+        self.fc3 = nn.Linear(1024, n_classes)
         if withDropout:
-            self.dr3 = nn.Dropout(0.2)
+            self.dr7 = nn.Dropout(0.5)
+            self.dr8 = nn.Dropout(0.5)
         else:
-            self.dr3 = nn.Identity()
-        self.fc1 = nn.Linear(128 * 8 * 8, 256)  # Flatten size depends on input dimensions
-        if withDropout:
-            self.dr3 = nn.Dropout(0.5)
-        else:
-            self.dr3 = nn.Identity()
-        self.n_embeddings = 256
-        self.fc2 = nn.Linear(self.n_embeddings, n_classes)
+            self.dr7 = nn.Identity()
+            self.dr8 = nn.Identity()
+        ####
+        self.n_embeddings = 1024
         self.fisher_information = {}
         self.estimated_means = {}
         self.prev_train_embedding_centers = []
@@ -178,35 +190,61 @@ class TinyImageNetCNN(nn.Module):
             self.estimated_means[name] = torch.zeros_like(param).to(globals.DEVICE)
     
     def forward(self, x):
-        x = self.imgdr(x)
         x = F.relu(self.conv1(x))
-        x = self.pool(x)
+        x = self.pool(x)  # Output: (64, 32, 32)
         x = self.dr1(x)
+
         x = F.relu(self.conv2(x))
-        x = self.pool(x)
+        x = self.pool(x)  # Output: (128, 16, 16)
         x = self.dr2(x)
+
         x = F.relu(self.conv3(x))
-        x = self.pool(x)
-        x = torch.flatten(x, 1)  # Flatten the tensor
-        x = F.relu(self.fc1(x))
         x = self.dr3(x)
-        x = self.fc2(x)
+        x = F.relu(self.conv4(x))
+        x = self.pool(x)  # Output: (256, 8, 8)
+        x = self.dr4(x)
+
+        x = F.relu(self.conv5(x))
+        x = self.dr5(x)
+        x = F.relu(self.conv6(x))
+        x = self.pool(x)  # Output: (512, 4, 4)
+        x = self.dr6(x)
+        # Flatten before fully connected layers
+        x = torch.flatten(x, 1)  # Output: (batch_size, 512 * 4 * 4)
+        
+        # Fully connected layers
+        x = self.dr7(F.relu(self.fc1(x)))
+        x = self.dr8(F.relu(self.fc2(x)))
+        x = self.fc3(x)
         return x
         
     def get_pred_and_embeddings(self, x):
-        x = self.imgdr(x)
         x = F.relu(self.conv1(x))
-        x = self.pool(x)
+        x = self.pool(x)  # Output: (64, 32, 32)
         x = self.dr1(x)
+
         x = F.relu(self.conv2(x))
-        x = self.pool(x)
+        x = self.pool(x)  # Output: (128, 16, 16)
         x = self.dr2(x)
+
         x = F.relu(self.conv3(x))
-        x = self.pool(x)
-        x = torch.flatten(x, 1)  # Flatten the tensor
-        embeddings = F.relu(self.fc1(x))
-        x = self.dr3(embeddings)
-        x = self.fc2(embeddings)
+        x = self.dr3(x)
+        x = F.relu(self.conv4(x))
+        x = self.pool(x)  # Output: (256, 8, 8)
+        x = self.dr4(x)
+
+        x = F.relu(self.conv5(x))
+        x = self.dr5(x)
+        x = F.relu(self.conv6(x))
+        x = self.pool(x)  # Output: (512, 4, 4)
+        x = self.dr6(x)
+        # Flatten before fully connected layers
+        x = torch.flatten(x, 1)  # Output: (batch_size, 512 * 4 * 4)
+        
+        # Fully connected layers
+        x = self.dr7(F.relu(self.fc1(x)))
+        embeddings = self.dr8(F.relu(self.fc2(x)))
+        x = self.fc3(embeddings)
         return x, embeddings
     
     def copyPrev(self, prevModel):
@@ -216,6 +254,12 @@ class TinyImageNetCNN(nn.Module):
         self.conv2.bias = copy.deepcopy(prevModel.conv2.bias)
         self.conv3.weight = copy.deepcopy(prevModel.conv3.weight)
         self.conv3.bias = copy.deepcopy(prevModel.conv3.bias)
+        self.conv4.weight = copy.deepcopy(prevModel.conv4.weight)
+        self.conv4.bias = copy.deepcopy(prevModel.conv4.bias)
+        self.conv5.weight = copy.deepcopy(prevModel.conv5.weight)
+        self.conv5.bias = copy.deepcopy(prevModel.conv5.bias)
+        self.conv6.weight = copy.deepcopy(prevModel.conv6.weight)
+        self.conv6.bias = copy.deepcopy(prevModel.conv6.bias)
         self.fc1.weight = copy.deepcopy(prevModel.fc1.weight)
         self.fc1.bias = copy.deepcopy(prevModel.fc1.bias)
         self.fc2.weight[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc2.weight)
