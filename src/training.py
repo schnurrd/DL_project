@@ -521,7 +521,7 @@ def train_model_CL(net,
                 print("Validation losses:", val_epochCELoss, val_epochKDLoss)
                 print("Validation accuracy (for last task)", task_val_accuracy)
                 print("Total validation accuracy", total_val_accuracy)
-                if validateOnAll:# and breakCondition:
+                if validateOnAll and globals.dataset == 'mnist':# and breakCondition:
                     plot_confusion_matrix(predicted_full, all_val_labels, list(range(CLASSES_PER_ITER*(iteration+1))))
                     plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, None)
             print('\n')
@@ -533,5 +533,5 @@ def train_model_CL(net,
     if ogd:
         optimizer.update_basis(trainloaders[iteration].dataset)
 
-    if verbose and globals.val_set_size != 0:
+    if globals.dataset == 'mnist' and verbose and globals.val_set_size != 0:
         plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, net.prev_test_embedding_centers)

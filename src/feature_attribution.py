@@ -285,7 +285,8 @@ class Feature_Importance_Evaluations:
         #print("HP4")
 
     def Save_Random_Picture_Salency(self,samples_per_label=1,plt_name="Salencymaps.png"):
-
+        if globals.dataset != 'mnist':
+            return
         images=[]
         salency_map_before=[]
         salency_map_after=[]

@@ -274,6 +274,7 @@ def store_additional_data(model, dataset, iter, fisher=False, batch_size = 20):
         model.estimated_means[name] = (named_params[name].data.clone()).to(globals.DEVICE)
 
 def store_test_embedding_centers(model, iter):
+    model.eval()
     embeddings_per_class = {}
     non_ood_classes = [j for j in range(globals.CLASSES_PER_ITER*(iter-1), globals.CLASSES_PER_ITER*(iter))]
     for c in non_ood_classes:
@@ -287,6 +288,7 @@ def store_test_embedding_centers(model, iter):
         for c in non_ood_classes:
             embeddings_per_class[c] = torch.cat(embeddings_per_class[c]).mean(dim=0)
             model.prev_test_embedding_centers.append(embeddings_per_class[c].to(globals.DEVICE))
+    model.train()
 
 def calc_ewc_loss(model):
     loss = torch.tensor(0.0, requires_grad = True)
