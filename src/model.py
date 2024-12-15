@@ -140,14 +140,17 @@ class MnistCNN(nn.Module):
 class TinyImageNetCNN(nn.Module): # Modified AlexNet https://github.com/DennisHanyuanXu/Tiny-ImageNet
     def __init__(self, n_classes):
         super(TinyImageNetCNN, self).__init__()
+        self.n_classes = n_classes
         withDropout = globals.WITH_DROPOUT
 
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1)  # Input: (3, 64, 64), Output: (64, 64, 64)
-        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)  # Output: (128, 64, 64)
-        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)  # Output: (256, 32, 32)
-        self.conv4 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)  # Output: (256, 32, 32)
-        self.conv5 = nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1)  # Output: (512, 16, 16)
-        self.conv6 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)  # Output: (512, 16, 16)
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=8, stride=2, padding=2)
+        self.mp1 = nn.MaxPool2d(kernel_size=3, stride=1)
+        self.conv2 = nn.Conv2d(64, 192, kernel_size=5, padding=2)
+        self.mp2 = nn.MaxPool2d(kernel_size=3, stride=2)
+        self.conv3 = nn.Conv2d(192, 384, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(384, 256, kernel_size=3, padding=1)
+        self.conv5 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
+        self.mp3 = nn.MaxPool2d(kernel_size=3, stride=2)
 
         if withDropout:
             self.imgdr = RandomSquareDropout(21)
@@ -156,7 +159,6 @@ class TinyImageNetCNN(nn.Module): # Modified AlexNet https://github.com/DennisHa
             self.dr3 = nn.Dropout(0.2)
             self.dr4 = nn.Dropout(0.2)
             self.dr5 = nn.Dropout(0.2)
-            self.dr6 = nn.Dropout(0.2)
         else:
             self.imgdr = nn.Identity()
             self.dr1 = nn.Identity()
@@ -164,22 +166,20 @@ class TinyImageNetCNN(nn.Module): # Modified AlexNet https://github.com/DennisHa
             self.dr3 = nn.Identity()
             self.dr4 = nn.Identity()
             self.dr5 = nn.Identity()
-            self.dr6 = nn.Identity()
         # Define pooling layer
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
         # Fully connected layers
-        self.fc1 = nn.Linear(512 * 4 * 4, 1024)
-        self.fc2 = nn.Linear(1024, 1024)
-        self.fc3 = nn.Linear(1024, n_classes)
+        self.fc1 = nn.Linear(256 * 6 * 6, 4096)
+        self.fc2 = nn.Linear(4096, 4096)
+        self.fc3 = nn.Linear(4096, n_classes)
         if withDropout:
+            self.dr6 = nn.Dropout(0.5)
             self.dr7 = nn.Dropout(0.5)
-            self.dr8 = nn.Dropout(0.5)
         else:
+            self.dr6 = nn.Identity()
             self.dr7 = nn.Identity()
-            self.dr8 = nn.Identity()
         ####
-        self.n_embeddings = 1024
+        self.n_embeddings = 4096
         self.fisher_information = {}
         self.estimated_means = {}
         self.prev_train_embedding_centers = []
@@ -191,60 +191,55 @@ class TinyImageNetCNN(nn.Module): # Modified AlexNet https://github.com/DennisHa
     
     def forward(self, x):
         x = F.relu(self.conv1(x))
-        x = self.pool(x)  # Output: (64, 32, 32)
+        x = self.mp1(x)
         x = self.dr1(x)
 
         x = F.relu(self.conv2(x))
-        x = self.pool(x)  # Output: (128, 16, 16)
+        x = self.mp2(x)  # Output: (128, 16, 16)
         x = self.dr2(x)
 
         x = F.relu(self.conv3(x))
         x = self.dr3(x)
         x = F.relu(self.conv4(x))
-        x = self.pool(x)  # Output: (256, 8, 8)
         x = self.dr4(x)
 
         x = F.relu(self.conv5(x))
         x = self.dr5(x)
-        x = F.relu(self.conv6(x))
-        x = self.pool(x)  # Output: (512, 4, 4)
-        x = self.dr6(x)
+        x = self.mp3(x)
         # Flatten before fully connected layers
         x = torch.flatten(x, 1)  # Output: (batch_size, 512 * 4 * 4)
         
         # Fully connected layers
-        x = self.dr7(F.relu(self.fc1(x)))
-        x = self.dr8(F.relu(self.fc2(x)))
+        x = self.dr6(F.relu(self.fc1(x)))
+        x = self.dr7(F.relu(self.fc2(x)))
         x = self.fc3(x)
         return x
         
     def get_pred_and_embeddings(self, x):
         x = F.relu(self.conv1(x))
-        x = self.pool(x)  # Output: (64, 32, 32)
+        x = self.mp1(x)
         x = self.dr1(x)
 
         x = F.relu(self.conv2(x))
-        x = self.pool(x)  # Output: (128, 16, 16)
+        x = self.mp2(x)  # Output: (128, 16, 16)
         x = self.dr2(x)
 
         x = F.relu(self.conv3(x))
         x = self.dr3(x)
         x = F.relu(self.conv4(x))
-        x = self.pool(x)  # Output: (256, 8, 8)
         x = self.dr4(x)
 
         x = F.relu(self.conv5(x))
         x = self.dr5(x)
-        x = F.relu(self.conv6(x))
-        x = self.pool(x)  # Output: (512, 4, 4)
-        x = self.dr6(x)
+        x = self.mp3(x)
         # Flatten before fully connected layers
         x = torch.flatten(x, 1)  # Output: (batch_size, 512 * 4 * 4)
         
         # Fully connected layers
-        x = self.dr7(F.relu(self.fc1(x)))
-        embeddings = self.dr8(F.relu(self.fc2(x)))
-        x = self.fc3(embeddings)
+        x = self.dr6(F.relu(self.fc1(x)))
+        embeddings = F.relu(self.fc2(x))
+        x = self.dr7(embeddings)
+        x = self.fc3(x)
         return x, embeddings
     
     def copyPrev(self, prevModel):
@@ -258,13 +253,12 @@ class TinyImageNetCNN(nn.Module): # Modified AlexNet https://github.com/DennisHa
         self.conv4.bias = copy.deepcopy(prevModel.conv4.bias)
         self.conv5.weight = copy.deepcopy(prevModel.conv5.weight)
         self.conv5.bias = copy.deepcopy(prevModel.conv5.bias)
-        self.conv6.weight = copy.deepcopy(prevModel.conv6.weight)
-        self.conv6.bias = copy.deepcopy(prevModel.conv6.bias)
         self.fc1.weight = copy.deepcopy(prevModel.fc1.weight)
         self.fc1.bias = copy.deepcopy(prevModel.fc1.bias)
-        self.fc2.weight[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc2.weight)
-        self.fc2.bias[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc2.bias)
-        
+        self.fc2.weight = copy.deepcopy(prevModel.fc2.weight)
+        self.fc2.bias = copy.deepcopy(prevModel.fc2.bias)
+        self.fc3.weight[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc3.weight)
+        self.fc3.bias[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc3.bias)
         self.fisher_information = {}
         self.estimated_means = {}
         self.prev_train_embedding_centers = prevModel.prev_train_embedding_centers

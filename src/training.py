@@ -172,7 +172,8 @@ def train_model(net,
             optimizer.update_basis(trainloaders[0].dataset)
         if save_path:
             torch.save(net.state_dict(), save_path)
-        store_additional_data(net, trainloader.dataset, 1) # update fisher information, etc
+        if center_loss > 0:
+            store_additional_data(net, trainloader.dataset, 1) # update fisher information, etc
         store_test_embedding_centers(net, 1)
 
 def train_model_CL(net, 
@@ -526,10 +527,11 @@ def train_model_CL(net,
             print('\n')
         if breakCondition:
             break
-    store_additional_data(net, trainloader.dataset, iteration+1)
+    if center_loss > 0 or distance_loss > 0:
+        store_additional_data(net, trainloader.dataset, iteration+1)
     store_test_embedding_centers(net, iteration+1)
     if ogd:
         optimizer.update_basis(trainloaders[iteration].dataset)
 
     if verbose and globals.val_set_size != 0:
-        plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, net.prev_train_embedding_centers)
+        plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, net.prev_test_embedding_centers)

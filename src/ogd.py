@@ -65,7 +65,7 @@ class OrthogonalGradientDescent:
         for idx, (inputs, labels) in enumerate(dataloader):  # might make sense to batch this
             if idx not in sampled_indices:
                 continue
-            inputs, labels = inputs.to(self.device), torch.tensor(
+            inputs, labels = inputs.to(self.device).unsqueeze(0), torch.tensor(
                 labels, device=self.device
             )
 

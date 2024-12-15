@@ -233,7 +233,7 @@ def apply_mask_to_gradients(model, masks):
                 # Only allow gradient updates where the mask is zero
                 param.grad *= (1 - masks[name])
                 
-def store_additional_data(model, dataset, iter, batch_size = 20):
+def store_additional_data(model, dataset, iter, fisher=False, batch_size = 20):
     '''
     Stores stuff like estimated fisher matrices for some losses, centers of embeddings on training data, etc 
     '''

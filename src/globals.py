@@ -4,21 +4,21 @@ ITERATIONS = 5
 CLASSES_PER_ITER = 2
 SEED = 42
 VAR_INFERENCE = False
-BATCH_SIZE = 40
+BATCH_SIZE = 64
 WITH_DROPOUT = False
 DEVICE = (
     torch.device("mps") if torch.backends.mps.is_available() else
     torch.device("cuda:0") if torch.cuda.is_available() else
     torch.device("cpu")
 )
-EXPERIMENT_N_RUNS = 20
+EXPERIMENT_N_RUNS = 2
 full_trainset = None
 trainset = None
 testset = None
 trainloaders = None
 valloaders = None
 testloaders = None
-val_set_size = 0.02
+val_set_size = 0.1
 OOD_CLASS = 0
 ood_method = 'jigsaw'
 dataset = 'tiny_imagenet' # supported are 'mnist' and 'tiny_imagenet'
