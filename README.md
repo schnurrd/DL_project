@@ -4,32 +4,41 @@ This project contains building blocks which allow experimenting on CL pipelines.
 
 ## File Descriptions
 
-### `augmenting_dataloader.py`
+### `src/augmenting_dataloader.py`
 This file contains code for augmenting the dataset within the DataLoader with the third out-of-distribution class. It includes techniques to apply real-time data augmentation during training and defines custom transformations for input data.
 
-### `experiment.ipynb`
-This Jupyter Notebook is used for running and visualizing experiments. It allows you to interactively test models, debug training, and visualize results like metrics, losses, confusion matrices, learned features and feature embeddings.
+### `src/embedding_measurements.py`
+Contains functions used to measure confusion, drift, etc across embeddings, used to quantify experiment results.
 
-### `globals.py`
-Defines global constants and variables for the project. Importantly -- if globals.OOD_CLASS is set to 1, then an additional class is added for every task which generates OOD data (logic for that is in augmenting_dataloader)
+### `src/feature_attribution.py`
+Logic used to quantify various metrics on the 'attention' of the model across tasks (SHAPC values, saliencies, etc)
 
-### `image_utils.py`
-Includes utility functions for image augmentation and visualization, mostly used for generating OOD samples.
+### `src/globals.py`
+Defines global constants and variables for the project.
 
-### `model.py`
-Houses the definition of the neural network architecture.
+### `src/image_utils.py`
+Includes utility functions for image augmentation and visualization.
 
-### `pytorch_utils.py`
+### `src/model.py`
+Houses the definitions of the CNN architectures.
+
+### `src/ogd.py`
+Houses the definition and methods of the Orthogonal Gradient Descent optimiser.
+
+### `src/pytorch_utils.py`
 Provides helper functions for PyTorch data.
 
-### `training_utils.py`
-Implements utility functions for training, including some loss definitions, logic to calculate parameters used for certain losses such as EWC, and some data augmentation logic used for building a buffer during training. These functions help streamline the training loop in `training.py`.
+### `src/training_utils.py`
+Implements utility functions for training, including some loss definitions, logic to calculate parameters used for certain losses such as EWC, and some data augmentation logic. A lot of these functions are unused legacy code for experiments that were scrapped, but they remain nonetheless in case there is a desire to expand experiments in the future.
 
-### `training.py`
+### `src/training.py`
 The main script for training the model. It integrates data loading, augmentation, training loops, evaluation, and logging to orchestrate the entire training process.
 
-### `visualizations.py`
+### `src/visualizations.py`
 Contains visualization functions for analyzing and understanding model performance. Examples include plotting embeddings and visual matrices.
+
+### `notebooks/experiment.ipynb`
+This Jupyter Notebook is used for running and visualizing experiments. It allows to interactively test models, debug training, and visualize results like metrics, losses, confusion matrices, learned features and feature embeddings.
 
 ### `README.md`
 This documentation file, providing an overview of the repository, its files, and their functionalities.
