@@ -6,6 +6,7 @@ from pytorch_utils import get_features, get_labels
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
+import globals
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 
 #[Denis] added class:
