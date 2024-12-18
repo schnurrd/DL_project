@@ -84,7 +84,7 @@ def train_model(net,
     if optimiser_type=='ogd':
         optimizer = OrthogonalGradientDescent(net, optim.SGD(params, lr=lr, momentum=0), max_basis_size=ogd_basis_size, device=DEVICE)
     elif optimiser_type=='sgd':
-        optimizer = optim.SGD(params, lr=lr, momentum=0.9)#, weight_decay = 0.001)
+        optimizer = optim.SGD(params, lr=lr, momentum=0)#, weight_decay = 0.001)
     elif optimiser_type=='adam':
         optimizer = optim.Adam(params, lr=lr)
     else:
@@ -218,9 +218,9 @@ def train_model_CL(net,
         Strength of Knowledge Distillation (KD) loss to transfer knowledge from `prevModel`.
     report_frequency : int, optional (default=1)
         on how many epochs to report accuracies, confusion matrices, embeddings, etc. 
-    lr : float, optional (default=0.001)
+    lr : float, optional (default=0.005)
         learning rate of optimizer
-    momentum : float, optional (default=0.9)
+    momentum : float, optional (default=0)
         momentum of optimizer (if applicable)
     stopOnLoss : float, optional (default=0.03)
         if not None, stop training when this cross entropy loss has been reached in training (will use validation loss if possible)
