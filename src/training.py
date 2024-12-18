@@ -77,12 +77,12 @@ def train_model(net,
     
     criterion = nn.CrossEntropyLoss()
     net = net.to(DEVICE)
-    lr = 0.001
+    lr = 0.005
     
     params = list(net.parameters())
     
     if optimiser_type=='ogd':
-        optimizer = OrthogonalGradientDescent(net, optim.SGD(params, lr=lr, momentum=0.9), max_basis_size=ogd_basis_size, device=DEVICE)
+        optimizer = OrthogonalGradientDescent(net, optim.SGD(params, lr=lr, momentum=0), max_basis_size=ogd_basis_size, device=DEVICE)
     elif optimiser_type=='sgd':
         optimizer = optim.SGD(params, lr=lr, momentum=0.9)#, weight_decay = 0.001)
     elif optimiser_type=='adam':
@@ -184,8 +184,8 @@ def train_model_CL(net,
                    full_CE = False,
                    kd_loss = 0,
                    report_frequency=1,
-                   lr = 0.001,
-                   momentum = 0.9,
+                   lr = 0.005,
+                   momentum = 0.0,
                    stopOnLoss = 0.03,
                    stopOnValAcc = None,
                    optimiser_type = 'sgd',
