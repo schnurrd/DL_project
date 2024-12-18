@@ -21,7 +21,6 @@ testloaders = None
 val_set_size = 0.1
 OOD_CLASS = 0
 ood_method = 'jigsaw'
-dataset = 'tiny_imagenet' # supported are 'mnist' and 'tiny_imagenet'
 
 def toggle_OOD(method = 'jigsaw'):
     '''

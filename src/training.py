@@ -39,7 +39,8 @@ def train_model(net,
                 save_path = None, 
                 epochs = 5,
                 stopOnLoss = 0.03,
-                ogd = False,
+                optimiser_type='sgd',
+                plotting = False
                 ):
     """
     Used to train on first task of CL.
@@ -75,10 +76,14 @@ def train_model(net,
     
     params = list(net.parameters())
     
-    if ogd:
+    if optimiser_type=='ogd':
         optimizer = OrthogonalGradientDescent(net, optim.SGD(params, lr=lr, momentum=0.9), device=DEVICE)
-    else:    
+    elif optimiser_type=='sgd':
         optimizer = optim.SGD(params, lr=lr, momentum=0.9)#, weight_decay = 0.001)
+    elif optimiser_type=='adam':
+        optimizer = optim.Adam(params, lr=lr)
+    else:
+        raise NotImplementedError("Unsupported optimiser type")
         
     model_path = load_path
     if model_path and os.path.isfile(model_path):
@@ -88,6 +93,8 @@ def train_model(net,
         for epoch in range(epochs):
             epochCELoss = 0.0
             val_epoch_loss = 0.0
+            epochCELoss_no_OOD = 0.0
+            ood_label = globals.CLASSES_PER_ITER
             for batch in trainloader:
                 inputs, labels = batch
                 inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
@@ -96,6 +103,11 @@ def train_model(net,
 
                 outputs, embeddings = net.get_pred_and_embeddings(inputs)
                 ceLoss = criterion(outputs, labels) # CE Loss
+                if globals.OOD_CLASS == 1:
+                    with torch.no_grad():
+                        mask = labels != ood_label
+                        if labels[mask].numel() != 0:
+                            epochCELoss_no_OOD += criterion(outputs[mask], labels[mask]).item()
                 epochCELoss += ceLoss.item()
                 loss = loss + ceLoss
                 
@@ -129,14 +141,17 @@ def train_model(net,
                 if len(valloader) > 0:
                     val_epoch_loss /= len(valloader)
             epochCELoss /= len(trainloader)
+            epochCELoss_no_OOD /= len(trainloader)
 
             if verbose and epoch%report_frequency == 0:
-                print(f"Epoch {epoch}, CE Loss: {epochCELoss:.4f}")
+                print(f"Epoch {epoch}, CE Loss: {epochCELoss:.4f}, CE Loss (no OOD): {epochCELoss_no_OOD:.4f}")
                 if globals.val_set_size != 0:
                     print("Validation loss", val_epoch_loss, "validation accuracy", total_val_accuracy, '\n')
-            if stopOnLoss is not None and epochCELoss < stopOnLoss:
-                break
-        if ogd:
+            if stopOnLoss is not None:
+                breakCondition = epochCELoss_no_OOD < stopOnLoss
+                if breakCondition:
+                    break
+        if optimiser_type=='ogd':
             optimizer.update_basis(trainloaders[0].dataset)
         if save_path:
             torch.save(net.state_dict(), save_path)
@@ -157,7 +172,8 @@ def train_model_CL(net,
                    momentum = 0.9,
                    stopOnLoss = 0.03,
                    stopOnValAcc = None,
-                   ogd = False,
+                   optimiser_type = 'sgd',
+                   plotting = False
                    ):
     """
     Parameters:
@@ -189,7 +205,7 @@ def train_model_CL(net,
     momentum : float, optional (default=0.9)
         momentum of optimizer (if applicable)
     stopOnLoss : float, optional (default=0.03)
-        if not None, stop training when this cross entropy loss has been reached in training
+        if not None, stop training when this cross entropy loss has been reached in training (will use validation loss if possible)
     stopOnValAcc : float, optional (default=None)
         if not None, stop training when this accuracy has been reached during validation
     ogd : bool, optional (default=False)
@@ -202,6 +218,7 @@ def train_model_CL(net,
     trainloaders = globals.trainloaders
     valloaders = globals.valloaders
     ood_label = (iteration+1)*globals.CLASSES_PER_ITER
+    epochCELoss_no_OOD = 0
     if not globals.ood_method:
         ds = trainloaders[iteration].dataset
     elif globals.ood_method == 'fmix':
@@ -229,10 +246,14 @@ def train_model_CL(net,
 
     params = list(net.parameters())
         
-    if ogd:
+    if optimiser_type == 'ogd':
         optimizer = OrthogonalGradientDescent(net, optim.SGD(params, lr=lr, momentum=momentum), device=DEVICE)
-    else:
+    elif optimiser_type == 'sgd':
         optimizer = optim.SGD(params, lr=lr, momentum=momentum)#, weight_decay = 0.001)
+    elif optimiser_type == 'adam':
+        optimizer = optim.Adam(params, lr=lr)
+    else:
+        raise NotImplementedError("Unsupported optimiser type")
         
     prevModel.eval()
     epoch = 0
@@ -266,8 +287,18 @@ def train_model_CL(net,
 
             if full_CE:
                 _ceLoss = ceLoss(outputs, labels)
+                if globals.OOD_CLASS == 1:
+                    mask = labels != ood_label
+                    with torch.no_grad():
+                        if labels[mask].numel() != 0:
+                            epochCELoss_no_OOD += ceLoss(outputs[mask], labels[mask] - iteration*(CLASSES_PER_ITER+globals.OOD_CLASS)).item()
             else:
                 _ceLoss = ceLoss(outputs[:,-CLASSES_PER_ITER-globals.OOD_CLASS:], labels - iteration*(CLASSES_PER_ITER+globals.OOD_CLASS))
+                if globals.OOD_CLASS == 1:
+                    mask = labels != ood_label
+                    with torch.no_grad():
+                        if labels[mask].numel() != 0:
+                            epochCELoss_no_OOD += ceLoss(outputs[mask,-CLASSES_PER_ITER-globals.OOD_CLASS:], labels[mask] - iteration*(CLASSES_PER_ITER+globals.OOD_CLASS)).item()
             epochCELoss += _ceLoss.item()
             loss = loss + _ceLoss
 
@@ -349,30 +380,31 @@ def train_model_CL(net,
 
         epochCELoss /= len(trainloader)
         epochKDLoss /= len(trainloader)
+        epochCELoss_no_OOD /= len(trainloader)
         breakCondition = True
         if stopOnLoss is not None:
-            breakCondition = epochCELoss < stopOnLoss
+            breakCondition = epochCELoss_no_OOD < stopOnLoss
         if stopOnValAcc is not None:
             breakCondition = breakCondition and task_val_accuracy > stopOnValAcc
         if stopOnLoss is None and stopOnValAcc is None:
             breakCondition = False
         #breakCondition = task_val_accuracy > 0.925
         if verbose and epoch%report_frequency == 0:
-            print("Epoch", epoch, f" CELoss: {epochCELoss:.4f}, KLLoss: {epochKDLoss:.4f}")
+            print("Epoch", epoch, f" CELoss: {epochCELoss:.4f}, KLLoss: {epochKDLoss:.4f}, CELoss (no OOD): {epochCELoss_no_OOD:.4f}")
             print("Fraction of nonzero parameters", calculate_nonzero_percentage(net))
             if globals.val_set_size != 0:
                 print("Validation losses:", val_epochCELoss, val_epochKDLoss)
                 print("Validation accuracy (for last task)", task_val_accuracy)
                 print("Total validation accuracy", total_val_accuracy)
-                if validateOnAll and globals.dataset == 'mnist':# and breakCondition:
+                if validateOnAll and plotting:# and breakCondition:
                     plot_confusion_matrix(predicted_full, all_val_labels, list(range(CLASSES_PER_ITER*(iteration+1))))
                     plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, None)
             print('\n')
         if breakCondition:
             break
     store_test_embedding_centers(net, iteration+1)
-    if ogd:
+    if optimiser_type == 'ogd':
         optimizer.update_basis(trainloaders[iteration].dataset)
 
-    if globals.dataset == 'mnist' and verbose and globals.val_set_size != 0:
+    if plotting and verbose and globals.val_set_size != 0:
         plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, net.prev_test_embedding_centers)
