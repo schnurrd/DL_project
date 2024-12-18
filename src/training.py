@@ -40,13 +40,17 @@ def train_model(net,
                 epochs = 5,
                 stopOnLoss = 0.03,
                 optimiser_type='sgd',
+                patience=None,
                 plotting = False
                 ):
     """
     Used to train on first task of CL.
     For more details, see comment of train_model_CL, most of which is analogous to this function
     """
-
+    if patience is not None:
+        bestModel = None
+        bestLoss = 9999999
+        epochs_without_improvement = 0
     start = time.time()
     CLASSES_PER_ITER = globals.CLASSES_PER_ITER
     DEVICE = globals.DEVICE
@@ -151,11 +155,22 @@ def train_model(net,
                 breakCondition = epochCELoss_no_OOD < stopOnLoss
                 if breakCondition:
                     break
+            if patience is not None:
+                if val_epoch_loss < bestLoss:
+                    bestLoss = val_epoch_loss
+                    bestModel = net
+                    epochs_without_improvement = 0
+                else:
+                    epochs_without_improvement += 1
+                    if epochs_without_improvement >= patience:
+                        net = bestModel
+                        break
         if optimiser_type=='ogd':
             optimizer.update_basis(trainloaders[0].dataset)
         if save_path:
             torch.save(net.state_dict(), save_path)
         store_test_embedding_centers(net, 1)
+        return net
 
 def train_model_CL(net, 
                    prevModel, 
@@ -173,7 +188,8 @@ def train_model_CL(net,
                    stopOnLoss = 0.03,
                    stopOnValAcc = None,
                    optimiser_type = 'sgd',
-                   plotting = False
+                   plotting = False,
+                   patience = None
                    ):
     """
     Parameters:
@@ -208,10 +224,18 @@ def train_model_CL(net,
         if not None, stop training when this cross entropy loss has been reached in training (will use validation loss if possible)
     stopOnValAcc : float, optional (default=None)
         if not None, stop training when this accuracy has been reached during validation
-    ogd : bool, optional (default=False)
-        if True, use orthogonal gradient descent as opposed to SGD
+    optimiser_type : string, optional (default='sgd')
+        the type of optimiser used, supported are 'sgd', 'ogd', 'adam'
+    plotting : bool, optional (default=False)
+        if true and if verbose is true, will also attempt to plot confusion matrices / embeddings
+    patience : int, optional (default=None)
+        if set, will apply early stopping with this patience
     """
     torch.autograd.set_detect_anomaly = True
+    if patience is not None:
+        bestModel = None
+        bestLoss = 9999999
+        epochs_without_improvement = 0
     CLASSES_PER_ITER = globals.CLASSES_PER_ITER
     DEVICE = globals.DEVICE
     trainloaders = globals.trainloaders
@@ -404,9 +428,20 @@ def train_model_CL(net,
             print('\n')
         if breakCondition:
             break
+        if patience is not None:
+            if val_epochCELoss < bestLoss:
+                bestLoss = val_epochCELoss
+                bestModel = net
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+                if epochs_without_improvement >= patience:
+                    net = bestModel
+                    break
     store_test_embedding_centers(net, iteration+1)
     if optimiser_type == 'ogd':
         optimizer.update_basis(trainloaders[iteration].dataset)
 
     if plotting and verbose and globals.val_set_size != 0:
         plot_embeddings(all_val_embeddings, all_val_labels, (iteration+1)*CLASSES_PER_ITER, net.prev_test_embedding_centers)
+    return net
