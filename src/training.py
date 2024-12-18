@@ -41,7 +41,8 @@ def train_model(net,
                 stopOnLoss = 0.03,
                 optimiser_type='sgd',
                 patience=None,
-                plotting = False
+                plotting = False,
+                ogd_basis_size=200
                 ):
     """
     Used to train on first task of CL.
@@ -81,7 +82,7 @@ def train_model(net,
     params = list(net.parameters())
     
     if optimiser_type=='ogd':
-        optimizer = OrthogonalGradientDescent(net, optim.SGD(params, lr=lr, momentum=0.9), device=DEVICE)
+        optimizer = OrthogonalGradientDescent(net, optim.SGD(params, lr=lr, momentum=0.9), max_basis_size=ogd_basis_size, device=DEVICE)
     elif optimiser_type=='sgd':
         optimizer = optim.SGD(params, lr=lr, momentum=0.9)#, weight_decay = 0.001)
     elif optimiser_type=='adam':
@@ -189,7 +190,8 @@ def train_model_CL(net,
                    stopOnValAcc = None,
                    optimiser_type = 'sgd',
                    plotting = False,
-                   patience = None
+                   patience = None,
+                   ogd_basis_size=200
                    ):
     """
     Parameters:
@@ -230,6 +232,8 @@ def train_model_CL(net,
         if true and if verbose is true, will also attempt to plot confusion matrices / embeddings
     patience : int, optional (default=None)
         if set, will apply early stopping with this patience
+    ogd_basis_size: int, optional (default=200)
+        if set and if optimiser_type is 'ogd', sets the max basis size for orthogonal gradient descent
     """
     torch.autograd.set_detect_anomaly = True
     if patience is not None:
@@ -269,7 +273,7 @@ def train_model_CL(net,
     params = list(net.parameters())
         
     if optimiser_type == 'ogd':
-        optimizer = OrthogonalGradientDescent(net, optim.SGD(params, lr=lr, momentum=momentum), device=DEVICE)
+        optimizer = OrthogonalGradientDescent(net, optim.SGD(params, lr=lr, momentum=momentum), max_basis_size=ogd_basis_size, device=DEVICE)
     elif optimiser_type == 'sgd':
         optimizer = optim.SGD(params, lr=lr, momentum=momentum)#, weight_decay = 0.001)
     elif optimiser_type == 'adam':
