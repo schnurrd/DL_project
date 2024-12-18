@@ -211,14 +211,12 @@ def train_model_CL(net,
     ogd : bool, optional (default=False)
         if True, use orthogonal gradient descent as opposed to SGD
     """
-
     torch.autograd.set_detect_anomaly = True
     CLASSES_PER_ITER = globals.CLASSES_PER_ITER
     DEVICE = globals.DEVICE
     trainloaders = globals.trainloaders
     valloaders = globals.valloaders
-    ood_label = (iteration+1)*globals.CLASSES_PER_ITER
-    epochCELoss_no_OOD = 0
+    ood_label = (iteration+1)*(globals.CLASSES_PER_ITER+1) - 1
     if not globals.ood_method:
         ds = trainloaders[iteration].dataset
     elif globals.ood_method == 'fmix':
@@ -259,6 +257,7 @@ def train_model_CL(net,
     epoch = 0
     for epoch in range(n_epochs): 
         epochCELoss = 0.0
+        epochCELoss_no_OOD = 0.0
         epochKDLoss = 0.0
         val_epochCELoss = 0.0
         val_epochKDLoss = 0.0
@@ -383,7 +382,10 @@ def train_model_CL(net,
         epochCELoss_no_OOD /= len(trainloader)
         breakCondition = True
         if stopOnLoss is not None:
-            breakCondition = epochCELoss_no_OOD < stopOnLoss
+            if globals.OOD_CLASS == 1:
+                breakCondition = epochCELoss_no_OOD < stopOnLoss
+            else:
+                breakCondition = epochCELoss < stopOnLoss
         if stopOnValAcc is not None:
             breakCondition = breakCondition and task_val_accuracy > stopOnValAcc
         if stopOnLoss is None and stopOnValAcc is None:
