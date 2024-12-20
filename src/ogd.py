@@ -16,7 +16,7 @@ class OrthogonalGradientDescent:
             to project new gradients onto the complement of previously stored directions.
     """
 
-    def __init__(self, model, optimizer, device="cpu", max_basis_size=200, reduce_basis=False):
+    def __init__(self, model, optimizer, device="cpu", max_basis_size=50, reduce_basis=False):
         """
         Args:
             model (nn.Module): The model being optimized. Must have a `model.ogd_basis` attribute,
@@ -88,29 +88,32 @@ class OrthogonalGradientDescent:
                 self.model.parameters()
             ).unsqueeze(
                 1
-            )  # Column vector
+            ).detach().cpu()  # Column vector
             sampled_gradients.append(grad_vec)
+        self.optimizer.zero_grad()
+
         if not sampled_gradients:
             self.optimizer.zero_grad()
             return
 
+        new_basis = torch.cat(sampled_gradients, dim=1)  # On CPU
+        self.model.ogd_basis = self.model.ogd_basis.cpu()
         # Combine the sampled gradients and orthonormalize
-        new_basis = torch.cat(sampled_gradients, dim=1)
         if self.model.ogd_basis.numel() > 0:
             combined_basis = torch.cat([self.model.ogd_basis.T, new_basis], dim=1)
             orthonormal_basis = self._orthonormalize(combined_basis)
         else:
             orthonormal_basis = self._orthonormalize(new_basis)
-
-
+        
+        del self.model.ogd_basis
+        torch.cuda.empty_cache()
+        
         # Truncate the basis to retain only the most informative vectors by norm
         if self.reduce_basis and orthonormal_basis.shape[1] > self.max_basis_size:
             orthonormal_basis = self._truncate_basis_by_norm(orthonormal_basis)
-
+        
         # Update the model's basis
-        self.model.ogd_basis = orthonormal_basis.T
-
-        self.optimizer.zero_grad()
+        self.model.ogd_basis = orthonormal_basis.T.to(self.device)
 
     def step(self):
         """
@@ -122,15 +125,17 @@ class OrthogonalGradientDescent:
 
         self._ensure_correct_dimension()
 
+        if self.model.ogd_basis.numel() == 0:
+            # If no basis, perform a regular optimizer step
+            self.optimizer.step()
+            self.optimizer.zero_grad()
+            return
+
         # Convert current gradients to a vector
         grad_vec = self._parameters_to_grad_vector(self.model.parameters())
 
         # Project gradients onto the orthogonal basis
-        if self.model.ogd_basis.numel() == 0:
-            corrected_grad = grad_vec
-        else:
-            proj_grad = self._project_vec(grad_vec, self.model.ogd_basis.T)
-            corrected_grad = grad_vec - proj_grad
+        corrected_grad = grad_vec - self._project_vec(grad_vec, self.model.ogd_basis.T)
 
         # Replace gradients in the model with the corrected gradients
         pointer = 0
@@ -144,6 +149,8 @@ class OrthogonalGradientDescent:
 
         self.optimizer.step()
         self.optimizer.zero_grad()
+        del grad_vec, corrected_grad
+        torch.cuda.empty_cache()
 
     def zero_grad(self):
         self.optimizer.zero_grad()
@@ -212,22 +219,25 @@ class OrthogonalGradientDescent:
         )
 
         if new_dim > old_dim and self.model.ogd_basis.numel() > 0:
+            
+            self.model.ogd_basis = self.model.ogd_basis.cpu()
+            
             # Zero-pad the old basis to match the new dimension
-            old_basis = self.model.ogd_basis
-            n_vectors = old_basis.shape[0]
+            n_vectors = self.model.ogd_basis.shape[0]
             padded_basis = torch.zeros(
-                (n_vectors, new_dim), device=self.device, dtype=old_basis.dtype
+                (n_vectors, new_dim), device='cpu', dtype=self.model.ogd_basis.dtype
             )
             new_pointer = 0
             old_pointer = 0
             for name, param in self.model.named_parameters():
                 new_size = param.numel()
                 old_size = self.model.old_param_size_map[name]
-                padded_basis[:, new_pointer:new_pointer+old_size] = old_basis[:, old_pointer : old_pointer + old_size]
+                padded_basis[:, new_pointer:new_pointer+old_size] = self.model.ogd_basis[:, old_pointer : old_pointer + old_size]
                 new_pointer += new_size
                 old_pointer += old_size
-
-            self.model.ogd_basis = padded_basis
+            torch.cuda.empty_cache()
+            self.model.ogd_basis = padded_basis.to(self.device)
+            del padded_basis
 
         # Update current_dim
         self.current_dim = new_dim

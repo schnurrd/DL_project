@@ -233,7 +233,7 @@ def apply_mask_to_gradients(model, masks):
                 # Only allow gradient updates where the mask is zero
                 param.grad *= (1 - masks[name])
 
-def store_test_embedding_centers(model, iter):
+def store_test_embedding_centers(model, iter, device='cpu'):
     model.eval()
     embeddings_per_class = {}
     non_ood_classes = [j for j in range(globals.CLASSES_PER_ITER*(iter-1), globals.CLASSES_PER_ITER*(iter))]
@@ -243,9 +243,9 @@ def store_test_embedding_centers(model, iter):
         data, target = data.to(globals.DEVICE), target.to(globals.DEVICE)
         _, embeddings = model.get_pred_and_embeddings(data)
         for c in non_ood_classes:
-            embeddings_per_class[c].append(embeddings[target == c].detach())
+            embeddings_per_class[c].append(embeddings[target == c].detach().to(device))
     if len(model.prev_test_embedding_centers) < iter*globals.CLASSES_PER_ITER:
         for c in non_ood_classes:
             embeddings_per_class[c] = torch.cat(embeddings_per_class[c]).mean(dim=0)
-            model.prev_test_embedding_centers.append(embeddings_per_class[c].to(globals.DEVICE))
+            model.prev_test_embedding_centers.append(embeddings_per_class[c].to(device))
     model.train()

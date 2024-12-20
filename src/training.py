@@ -421,7 +421,6 @@ def train_model_CL(net,
                     total_val_accuracy = correct / len(all_val_labels)
                     all_val_labels = np.array(all_val_labels)
                     all_val_embeddings = np.array(all_val_embeddings)
-                net.train()
             net.train()
 
             if len(valloader) > 0:

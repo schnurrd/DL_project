@@ -62,7 +62,14 @@ class Feature_Importance_Evaluations:
         return ac_ten
         
     def _preparations_model(self,CL_model):
-        self.attribution_model=copy.deepcopy(CL_model).to(self.DEVICE)
+        if hasattr(CL_model, "ogd_basis"):
+            ogd_basis = CL_model.ogd_basis  # Save ogd_basis
+            CL_model.ogd_basis = None       # Temporarily remove it
+
+        self.attribution_model = copy.deepcopy(CL_model).to(self.DEVICE)
+
+        if hasattr(CL_model, "ogd_basis"):
+            CL_model.ogd_basis = ogd_basis  # Restore ogd_basis
         self.attribution_model.eval()
 
         if self.Attribution_Method=="GradientShap":

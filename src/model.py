@@ -364,7 +364,9 @@ class Cifar10CNN(nn.Module): # Modified AlexNet https://github.com/DennisHanyuan
         self.prev_train_embedding_centers = prevModel.prev_train_embedding_centers
         self.prev_test_embedding_centers = prevModel.prev_test_embedding_centers
         self.n_embeddings = prevModel.n_embeddings
-        self.ogd_basis = copy.deepcopy(prevModel.ogd_basis)
+        if hasattr(prevModel, "ogd_basis"):
+            self.ogd_basis = prevModel.ogd_basis  # Save ogd_basis
+            prevModel.ogd_basis = None
         
         self.old_param_size_map = {}
         pointer = 0
