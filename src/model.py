@@ -260,7 +260,7 @@ class Cifar10CNN(nn.Module): # Modified AlexNet https://github.com/DennisHanyuan
         self.mp3 = nn.MaxPool2d(kernel_size=2, stride=2)  # Pooling reduces to 4x4
 
         if withDropout:
-            self.imgdr = RandomSquareDropout(21)
+            self.imgdr = RandomSquareDropout(10)
             self.dr1 = nn.Dropout(0.2)
             self.dr2 = nn.Dropout(0.2)
             self.dr3 = nn.Dropout(0.2)
