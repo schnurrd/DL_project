@@ -84,6 +84,9 @@ def train_model(net,
     net = net.to(DEVICE)
     if only_output_layer:
         lr = 0.003 #decided not to change
+        for name, module in net.named_children(): #remove dropouts
+            if 'dr' in name:
+                setattr(net, name, nn.Identity())
     else:
         lr = 0.003
     if only_output_layer:
