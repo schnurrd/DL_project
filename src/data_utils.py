@@ -49,7 +49,7 @@ def initialize_data(dataset='mnist'):
         val_indices = []
 
     # Create subsets
-    valset = Subset(globals.full_trainset, val_indices)
+    globals.valset = Subset(globals.full_trainset, val_indices)
     globals.trainset = Subset(globals.full_trainset, train_indices)
 
     # Define class pairs for each subset
@@ -69,7 +69,7 @@ def initialize_data(dataset='mnist'):
         return class_to_indices
 
     train_class_to_indices = compute_class_to_indices(globals.trainset)
-    val_class_to_indices = compute_class_to_indices(valset)
+    val_class_to_indices = compute_class_to_indices(globals.valset)
     test_class_to_indices = compute_class_to_indices(globals.testset)
 
     # Loop over each class pair
@@ -84,7 +84,7 @@ def initialize_data(dataset='mnist'):
         globals.trainloaders.append(DataLoader(train_subset, batch_size=globals.BATCH_SIZE, shuffle=True, pin_memory=True, num_workers = 0))
         subset_indices.append(subs_ind)
         
-        val_subset = Subset(valset, val_subset_indices)
+        val_subset = Subset(globals.valset, val_subset_indices)
         globals.valloaders.append(DataLoader(val_subset, batch_size=100, shuffle=False))
 
         test_subset = Subset(globals.testset, test_subset_indices)

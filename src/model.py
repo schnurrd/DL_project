@@ -50,21 +50,16 @@ class MnistCNN(nn.Module):
             self.dr2 = nn.Dropout(0.2)
         else:
             self.dr2 = nn.Identity()
-        self.fc1 = nn.Linear(64 * 5 * 5, 128)
+        self.output_layer = nn.Linear(64 * 5 * 5, 128)
         if withDropout:
             self.dr3 = nn.Dropout(0.5)
         else:
             self.dr3 = nn.Identity()
         self.n_embeddings = 128
         self.fc2 = nn.Linear(self.n_embeddings, n_classes)
-        self.fisher_information = {}
-        self.estimated_means = {}
         self.prev_train_embedding_centers = []
         self.prev_test_embedding_centers = []
         self.ogd_basis = torch.empty((0, 0), device=globals.DEVICE)
-        for name, param in self.named_parameters():
-            self.fisher_information[name] = torch.zeros_like(param).to(globals.DEVICE)
-            self.estimated_means[name] = torch.zeros_like(param).to(globals.DEVICE)
 
     def forward(self, x):
         x = self.imgdr(x)
@@ -75,7 +70,7 @@ class MnistCNN(nn.Module):
         x = F.max_pool2d(x, 2)
         x = self.dr2(x)
         x = x.view(-1, 64 * 5 * 5)
-        x = F.relu(self.fc1(x))
+        x = F.relu(self.output_layer(x))
         x = self.dr3(x)
         x = self.fc2(x)
         return x
@@ -88,7 +83,7 @@ class MnistCNN(nn.Module):
             x = F.max_pool2d(x, 2)
             x = self.dr2(x)
             x = x.view(-1, 64 * 5 * 5)
-            embeddings = F.relu(self.fc1(x))
+            embeddings = F.relu(self.output_layer(x))
             x = self.dr3(embeddings)
             x = self.fc2(x)
             return x, embeddings
@@ -98,13 +93,11 @@ class MnistCNN(nn.Module):
         self.conv1.bias = copy.deepcopy(prevModel.conv1.bias)
         self.conv2.weight = copy.deepcopy(prevModel.conv2.weight)
         self.conv2.bias = copy.deepcopy(prevModel.conv2.bias)
-        self.fc1.weight = copy.deepcopy(prevModel.fc1.weight)
-        self.fc1.bias = copy.deepcopy(prevModel.fc1.bias)
+        self.output_layer.weight = copy.deepcopy(prevModel.output_layer.weight)
+        self.output_layer.bias = copy.deepcopy(prevModel.output_layer.bias)
         self.fc2.weight[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc2.weight)
         self.fc2.bias[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc2.bias)
         
-        self.fisher_information = {}
-        self.estimated_means = {}
         self.prev_train_embedding_centers = prevModel.prev_train_embedding_centers
         self.prev_test_embedding_centers = prevModel.prev_test_embedding_centers
         self.n_embeddings = prevModel.n_embeddings
@@ -112,34 +105,11 @@ class MnistCNN(nn.Module):
         
         self.old_param_size_map = {}
         pointer = 0
-        if prevModel.fisher_information == {} and prevModel.estimated_means == {}:
-            return
         for name, param in prevModel.named_parameters():
             param_size = param.numel()
             end_idx = pointer + param_size
             self.old_param_size_map[name] = param_size
             pointer = end_idx
-
-        for name, param in self.named_parameters():
-            if prevModel.fisher_information[name].shape == param.shape:
-                # Directly copy Fisher Information and means for matching dimensions
-                self.fisher_information[name] = prevModel.fisher_information[name].clone().to(globals.DEVICE)
-                self.estimated_means[name] = prevModel.estimated_means[name].clone().to(globals.DEVICE)
-            else:
-                # Initialize new parameter with expanded dimensions
-                new_fisher = torch.zeros_like(param)
-                new_means = torch.zeros_like(param)  # Start with current values for new parameters
-
-                # Determine matching dimensions dynamically
-                matching_slices = tuple(slice(0, min(dim_new, dim_old)) 
-                                        for dim_new, dim_old in zip(param.shape, prevModel.fisher_information[name].shape))
-
-                # Copy over existing values for matching dimensions
-                new_fisher[matching_slices] = prevModel.fisher_information[name][matching_slices]
-                new_means[matching_slices] = prevModel.estimated_means[name][matching_slices]
-
-                self.fisher_information[name] = new_fisher.to(globals.DEVICE)
-                self.estimated_means[name] = new_means.to(globals.DEVICE)
 
 # Model for Tiny Imagenet
 class TinyImageNetCNN(nn.Module): # Modified AlexNet https://github.com/DennisHanyuanXu/Tiny-ImageNet
@@ -176,7 +146,7 @@ class TinyImageNetCNN(nn.Module): # Modified AlexNet https://github.com/DennisHa
         # Fully connected layers
         self.fc1 = nn.Linear(256 * 6 * 6, 4096)
         self.fc2 = nn.Linear(4096, 4096)
-        self.fc3 = nn.Linear(4096, n_classes)
+        self.output_layer = nn.Linear(4096, n_classes)
         if withDropout:
             self.dr6 = nn.Dropout(0.5)
             self.dr7 = nn.Dropout(0.5)
@@ -185,14 +155,9 @@ class TinyImageNetCNN(nn.Module): # Modified AlexNet https://github.com/DennisHa
             self.dr7 = nn.Identity()
         ####
         self.n_embeddings = 4096
-        self.fisher_information = {}
-        self.estimated_means = {}
         self.prev_train_embedding_centers = []
         self.prev_test_embedding_centers = []
         self.ogd_basis = torch.empty((0, 0), device=globals.DEVICE)
-        for name, param in self.named_parameters():
-            self.fisher_information[name] = torch.zeros_like(param).to(globals.DEVICE)
-            self.estimated_means[name] = torch.zeros_like(param).to(globals.DEVICE)
     
     def forward(self, x):
         x = F.relu(self.conv1(x))
@@ -217,7 +182,7 @@ class TinyImageNetCNN(nn.Module): # Modified AlexNet https://github.com/DennisHa
         # Fully connected layers
         x = self.dr6(F.relu(self.fc1(x)))
         x = self.dr7(F.relu(self.fc2(x)))
-        x = self.fc3(x)
+        x = self.output_layer(x)
         return x
         
     def get_pred_and_embeddings(self, x):
@@ -244,7 +209,7 @@ class TinyImageNetCNN(nn.Module): # Modified AlexNet https://github.com/DennisHa
         x = self.dr6(F.relu(self.fc1(x)))
         embeddings = F.relu(self.fc2(x))
         x = self.dr7(embeddings)
-        x = self.fc3(x)
+        x = self.output_layer(x)
         return x, embeddings
     
     def copyPrev(self, prevModel):
@@ -262,10 +227,8 @@ class TinyImageNetCNN(nn.Module): # Modified AlexNet https://github.com/DennisHa
         self.fc1.bias = copy.deepcopy(prevModel.fc1.bias)
         self.fc2.weight = copy.deepcopy(prevModel.fc2.weight)
         self.fc2.bias = copy.deepcopy(prevModel.fc2.bias)
-        self.fc3.weight[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc3.weight)
-        self.fc3.bias[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc3.bias)
-        self.fisher_information = {}
-        self.estimated_means = {}
+        self.output_layer.weight[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.output_layer.weight)
+        self.output_layer.bias[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.output_layer.bias)
         self.prev_train_embedding_centers = prevModel.prev_train_embedding_centers
         self.prev_test_embedding_centers = prevModel.prev_test_embedding_centers
         self.n_embeddings = prevModel.n_embeddings
@@ -274,34 +237,11 @@ class TinyImageNetCNN(nn.Module): # Modified AlexNet https://github.com/DennisHa
         self.old_param_size_map = {}
         pointer = 0
 
-        if prevModel.fisher_information == {} and prevModel.estimated_means == {}:
-            return
         for name, param in prevModel.named_parameters():
             param_size = param.numel()
             end_idx = pointer + param_size
             self.old_param_size_map[name] = param_size
             pointer = end_idx
-
-        for name, param in self.named_parameters():
-            if prevModel.fisher_information[name].shape == param.shape:
-                # Directly copy Fisher Information and means for matching dimensions
-                self.fisher_information[name] = prevModel.fisher_information[name].clone().to(globals.DEVICE)
-                self.estimated_means[name] = prevModel.estimated_means[name].clone().to(globals.DEVICE)
-            else:
-                # Initialize new parameter with expanded dimensions
-                new_fisher = torch.zeros_like(param)
-                new_means = torch.zeros_like(param)  # Start with current values for new parameters
-
-                # Determine matching dimensions dynamically
-                matching_slices = tuple(slice(0, min(dim_new, dim_old)) 
-                                        for dim_new, dim_old in zip(param.shape, prevModel.fisher_information[name].shape))
-
-                # Copy over existing values for matching dimensions
-                new_fisher[matching_slices] = prevModel.fisher_information[name][matching_slices]
-                new_means[matching_slices] = prevModel.estimated_means[name][matching_slices]
-
-                self.fisher_information[name] = new_fisher.to(globals.DEVICE)
-                self.estimated_means[name] = new_means.to(globals.DEVICE)
 
 # Model for CIFAR10
 class Cifar10CNN(nn.Module): # Modified AlexNet https://github.com/DennisHanyuanXu/Tiny-ImageNet
@@ -338,7 +278,7 @@ class Cifar10CNN(nn.Module): # Modified AlexNet https://github.com/DennisHanyuan
         # Fully connected layers
         self.fc1 = nn.Linear(256 * 4 * 4, 1024)  # Adjusted input size after 4x4 pooling
         self.fc2 = nn.Linear(1024, 512)
-        self.fc3 = nn.Linear(512, n_classes)
+        self.output_layer = nn.Linear(512, n_classes)
         if withDropout:
             self.dr6 = nn.Dropout(0.5)
             self.dr7 = nn.Dropout(0.5)
@@ -347,14 +287,9 @@ class Cifar10CNN(nn.Module): # Modified AlexNet https://github.com/DennisHanyuan
             self.dr7 = nn.Identity()
         ####
         self.n_embeddings = 512
-        self.fisher_information = {}
-        self.estimated_means = {}
         self.prev_train_embedding_centers = []
         self.prev_test_embedding_centers = []
         self.ogd_basis = torch.empty((0, 0), device=globals.DEVICE)
-        for name, param in self.named_parameters():
-            self.fisher_information[name] = torch.zeros_like(param).to(globals.DEVICE)
-            self.estimated_means[name] = torch.zeros_like(param).to(globals.DEVICE)
     
     def forward(self, x):
         x = F.relu(self.conv1(x))
@@ -379,7 +314,7 @@ class Cifar10CNN(nn.Module): # Modified AlexNet https://github.com/DennisHanyuan
         # Fully connected layers
         x = self.dr6(F.relu(self.fc1(x)))
         x = self.dr7(F.relu(self.fc2(x)))
-        x = self.fc3(x)
+        x = self.output_layer(x)
         return x
         
     def get_pred_and_embeddings(self, x):
@@ -406,7 +341,7 @@ class Cifar10CNN(nn.Module): # Modified AlexNet https://github.com/DennisHanyuan
         x = self.dr6(F.relu(self.fc1(x)))
         embeddings = F.relu(self.fc2(x))
         x = self.dr7(embeddings)
-        x = self.fc3(x)
+        x = self.output_layer(x)
         return x, embeddings
     
     def copyPrev(self, prevModel):
@@ -424,10 +359,8 @@ class Cifar10CNN(nn.Module): # Modified AlexNet https://github.com/DennisHanyuan
         self.fc1.bias = copy.deepcopy(prevModel.fc1.bias)
         self.fc2.weight = copy.deepcopy(prevModel.fc2.weight)
         self.fc2.bias = copy.deepcopy(prevModel.fc2.bias)
-        self.fc3.weight[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc3.weight)
-        self.fc3.bias[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.fc3.bias)
-        self.fisher_information = {}
-        self.estimated_means = {}
+        self.output_layer.weight[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.output_layer.weight)
+        self.output_layer.bias[:self.n_classes - globals.CLASSES_PER_ITER-globals.OOD_CLASS] = copy.deepcopy(prevModel.output_layer.bias)
         self.prev_train_embedding_centers = prevModel.prev_train_embedding_centers
         self.prev_test_embedding_centers = prevModel.prev_test_embedding_centers
         self.n_embeddings = prevModel.n_embeddings
@@ -436,31 +369,8 @@ class Cifar10CNN(nn.Module): # Modified AlexNet https://github.com/DennisHanyuan
         self.old_param_size_map = {}
         pointer = 0
 
-        if prevModel.fisher_information == {} and prevModel.estimated_means == {}:
-            return
         for name, param in prevModel.named_parameters():
             param_size = param.numel()
             end_idx = pointer + param_size
             self.old_param_size_map[name] = param_size
             pointer = end_idx
-
-        for name, param in self.named_parameters():
-            if prevModel.fisher_information[name].shape == param.shape:
-                # Directly copy Fisher Information and means for matching dimensions
-                self.fisher_information[name] = prevModel.fisher_information[name].clone().to(globals.DEVICE)
-                self.estimated_means[name] = prevModel.estimated_means[name].clone().to(globals.DEVICE)
-            else:
-                # Initialize new parameter with expanded dimensions
-                new_fisher = torch.zeros_like(param)
-                new_means = torch.zeros_like(param)  # Start with current values for new parameters
-
-                # Determine matching dimensions dynamically
-                matching_slices = tuple(slice(0, min(dim_new, dim_old)) 
-                                        for dim_new, dim_old in zip(param.shape, prevModel.fisher_information[name].shape))
-
-                # Copy over existing values for matching dimensions
-                new_fisher[matching_slices] = prevModel.fisher_information[name][matching_slices]
-                new_means[matching_slices] = prevModel.estimated_means[name][matching_slices]
-
-                self.fisher_information[name] = new_fisher.to(globals.DEVICE)
-                self.estimated_means[name] = new_means.to(globals.DEVICE)

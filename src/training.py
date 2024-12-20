@@ -17,14 +17,12 @@ from training_utils import (batch_compute_saliency_maps,
                             calculate_nonzero_percentage, 
                             create_nonzero_mask,
                             create_zero_mask,
-                            store_additional_data,
-                            calc_ewc_loss,
                             apply_mask_to_gradients,
                             store_test_embedding_centers,
                             CenterLoss)
 from ogd import OrthogonalGradientDescent
 
-from augmenting_dataloader import AugmentedOODTrainset, CutMixOODTrainset, FMixOODTrainset, SmoothMixOODTrainset, JigsawOODTrainset
+from augmenting_dataloader import JointTrainingNoOODTrainset, CutMixOODTrainset, FMixOODTrainset, SmoothMixOODTrainset, JigsawOODTrainset
 from visualizations import plot_embeddings, plot_confusion_matrix
 from image_utils import show_image
 
@@ -42,7 +40,9 @@ def train_model(net,
                 optimiser_type='sgd',
                 patience=None,
                 plotting = False,
-                ogd_basis_size=200
+                ogd_basis_size=200,
+                only_output_layer=False,
+                classes_per_iter=None
                 ):
     """
     Used to train on first task of CL.
@@ -58,7 +58,12 @@ def train_model(net,
     ITERATIONS = globals.ITERATIONS
     trainloaders = globals.trainloaders
     if not globals.ood_method:
-        ds = trainloaders[0].dataset
+        if not only_output_layer:
+            ds = trainloaders[0].dataset
+        else:
+            ds = globals.trainset
+    elif only_output_layer:
+        ds = JointTrainingNoOODTrainset(classes_per_iter)
     elif globals.ood_method == 'fmix':
         ds = FMixOODTrainset(0, len(trainloaders[0].dataset)//CLASSES_PER_ITER)
         ds.display_ood_samples()
@@ -77,14 +82,28 @@ def train_model(net,
     
     criterion = nn.CrossEntropyLoss()
     net = net.to(DEVICE)
-    lr = 0.005
-    
-    params = list(net.parameters())
+    if only_output_layer:
+        lr = 0.003 #decided not to change
+    else:
+        lr = 0.003
+    if only_output_layer:
+        # Freeze all parameters
+        for param in net.parameters():
+            param.requires_grad = False
+
+        # Unfreeze the parameters of the output layer
+        for param in net.output_layer.parameters():
+            param.requires_grad = True
+
+        # Pass only the output layer parameters to the optimizer
+        params = list(net.output_layer.parameters())
+    else:
+        params = list(net.parameters())
     
     if optimiser_type=='ogd':
-        optimizer = OrthogonalGradientDescent(net, optim.SGD(params, lr=lr, momentum=0), max_basis_size=ogd_basis_size, device=DEVICE)
+        optimizer = OrthogonalGradientDescent(net, optim.SGD(params, lr=lr, momentum=0.8), max_basis_size=ogd_basis_size, device=DEVICE)
     elif optimiser_type=='sgd':
-        optimizer = optim.SGD(params, lr=lr, momentum=0)#, weight_decay = 0.001)
+        optimizer = optim.SGD(params, lr=lr, momentum=0.8)#, weight_decay = 0.001)
     elif optimiser_type=='adam':
         optimizer = optim.Adam(params, lr=lr)
     else:
@@ -184,8 +203,8 @@ def train_model_CL(net,
                    full_CE = False,
                    kd_loss = 0,
                    report_frequency=1,
-                   lr = 0.005,
-                   momentum = 0.0,
+                   lr = 0.003,
+                   momentum = 0.8,
                    stopOnLoss = 0.03,
                    stopOnValAcc = None,
                    optimiser_type = 'sgd',
@@ -218,9 +237,9 @@ def train_model_CL(net,
         Strength of Knowledge Distillation (KD) loss to transfer knowledge from `prevModel`.
     report_frequency : int, optional (default=1)
         on how many epochs to report accuracies, confusion matrices, embeddings, etc. 
-    lr : float, optional (default=0.005)
+    lr : float, optional (default=0.003)
         learning rate of optimizer
-    momentum : float, optional (default=0)
+    momentum : float, optional (default=0.0)
         momentum of optimizer (if applicable)
     stopOnLoss : float, optional (default=0.03)
         if not None, stop training when this cross entropy loss has been reached in training (will use validation loss if possible)
@@ -330,7 +349,8 @@ def train_model_CL(net,
             loss = loss + _ceLoss
 
             if kd_loss != 0: # knowledge distillation loss
-                _kd_loss = kd_loss*klDivLoss(F.log_softmax(oldClassOutputs, dim=-1), F.softmax(prevOutputs, dim=-1))
+                T = 2
+                _kd_loss = kd_loss*klDivLoss(F.log_softmax(oldClassOutputs/T, dim=-1), F.softmax(prevOutputs/T, dim=-1))*T*T
                 epochKDLoss += _kd_loss.item()
                 loss = loss + _kd_loss
             #for it in range(iteration):

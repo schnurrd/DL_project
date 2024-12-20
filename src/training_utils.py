@@ -232,46 +232,6 @@ def apply_mask_to_gradients(model, masks):
             if param.grad is not None:
                 # Only allow gradient updates where the mask is zero
                 param.grad *= (1 - masks[name])
-                
-def store_additional_data(model, dataset, iter, fisher=False, batch_size = 20):
-    '''
-    Stores stuff like estimated fisher matrices for some losses, centers of embeddings on training data, etc 
-    '''
-    if iter == 0:
-        raise Exception("Iteration must be greater than 0!")
-    named_params = {name: param for name, param in model.named_parameters()} # convert iterator to dict
-    model.eval()
-    log_likelihoods = []
-    embeddings_per_class = {}
-    non_ood_classes = [(iter-1)*(globals.CLASSES_PER_ITER+globals.OOD_CLASS) + j for j in range(globals.CLASSES_PER_ITER)]
-    for c in non_ood_classes:
-        embeddings_per_class[c] = []
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 0)
-    for data, target in loader:
-        data, target = data.to(globals.DEVICE), target.to(globals.DEVICE)
-        if globals.OOD_CLASS:
-            target += iter-1
-            mask = target != (iter-1)*(globals.CLASSES_PER_ITER+globals.OOD_CLASS) + globals.CLASSES_PER_ITER
-        else:
-            mask = torch.ones_like(target, dtype=torch.bool)
-        model.zero_grad()
-        output, embeddings = model.get_pred_and_embeddings(data)
-        for c in non_ood_classes:
-            embeddings_per_class[c].append(embeddings[target == c].detach())
-        output, target = output[mask], target[mask]
-        output = F.log_softmax(output, dim=1)
-        log_likelihoods.append(output[range(len(target)), target])
-
-    log_likelihood = torch.cat(log_likelihoods).mean()
-    if len(model.prev_train_embedding_centers) < iter*globals.CLASSES_PER_ITER:
-        for c in non_ood_classes:
-            embeddings_per_class[c] = torch.cat(embeddings_per_class[c]).mean(dim=0)
-            model.prev_train_embedding_centers.append(embeddings_per_class[c].to(globals.DEVICE))
-    grad_log_likelihood = autograd.grad(log_likelihood, model.parameters())
-    names = [name for name, _ in named_params.items()]
-    for name, param in zip(names, grad_log_likelihood):
-        model.fisher_information[name] = (model.fisher_information[name] + (param.data.clone() ** 2).to(globals.DEVICE))
-        model.estimated_means[name] = (named_params[name].data.clone()).to(globals.DEVICE)
 
 def store_test_embedding_centers(model, iter):
     model.eval()
@@ -289,10 +249,3 @@ def store_test_embedding_centers(model, iter):
             embeddings_per_class[c] = torch.cat(embeddings_per_class[c]).mean(dim=0)
             model.prev_test_embedding_centers.append(embeddings_per_class[c].to(globals.DEVICE))
     model.train()
-
-def calc_ewc_loss(model):
-    loss = torch.tensor(0.0, requires_grad = True)
-    for n, p in model.named_parameters():
-        _loss = model.fisher_information[n] * (p - model.estimated_means[n])**2
-        loss = loss + _loss.sum()
-    return loss

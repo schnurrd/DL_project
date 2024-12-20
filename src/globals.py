@@ -13,6 +13,7 @@ DEVICE = (
 EXPERIMENT_N_RUNS = 3
 full_trainset = None
 trainset = None
+valset = None
 testset = None
 trainloaders = None
 valloaders = None
