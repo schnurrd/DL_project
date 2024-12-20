@@ -465,7 +465,7 @@ def train_model_CL(net,
                     net = bestModel
                     break
     store_test_embedding_centers(net, iteration+1)
-    if optimiser_type == 'ogd':
+    if optimiser_type == 'ogd' and iteration != globals.ITERATIONS-1:
         optimizer.update_basis(trainloaders[iteration].dataset)
 
     if plotting and verbose and globals.val_set_size != 0:
