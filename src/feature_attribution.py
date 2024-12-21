@@ -55,7 +55,9 @@ class Feature_Importance_Evaluations:
     def _normalize_tensor(self,ac_ten,abs=True):#Get it into the range of 0 to 1 and summing up to 1
         #another version could be softmax
         ac_ten_abs=torch.abs(ac_ten)
-        if abs:
+        if ac_ten_abs.sum()==0:
+            return 0
+        elif abs:
             ac_ten=ac_ten_abs/ac_ten_abs.sum()
         else:
             ac_ten=ac_ten/ac_ten_abs.sum()
