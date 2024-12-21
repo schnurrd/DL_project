@@ -56,7 +56,7 @@ class Feature_Importance_Evaluations:
         #another version could be softmax
         ac_ten_abs=torch.abs(ac_ten)
         if ac_ten_abs.sum()==0:
-            return 0
+            return torch.zeros_like(ac_ten_abs)
         elif abs:
             ac_ten=ac_ten_abs/ac_ten_abs.sum()
         else:
