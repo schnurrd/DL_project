@@ -42,7 +42,8 @@ def train_model(net,
                 plotting = False,
                 ogd_basis_size=200,
                 only_output_layer=False,
-                classes_per_iter=None
+                classes_per_iter=None,
+                lr = 0.003
                 ):
     """
     Used to train on first task of CL.
@@ -83,12 +84,9 @@ def train_model(net,
     criterion = nn.CrossEntropyLoss()
     net = net.to(DEVICE)
     if only_output_layer:
-        lr = 0.003 #decided not to change
         for name, module in net.named_children(): #remove dropouts
             if 'dr' in name:
                 setattr(net, name, nn.Identity())
-    else:
-        lr = 0.003
     if only_output_layer:
         # Freeze all parameters
         for param in net.parameters():
@@ -108,7 +106,7 @@ def train_model(net,
     elif optimiser_type=='sgd':
         optimizer = optim.SGD(params, lr=lr, momentum=0.8)#, weight_decay = 0.001)
     elif optimiser_type=='adam':
-        optimizer = optim.Adam(params, lr=lr)
+        optimizer = optim.AdamW(params, lr=lr)
     else:
         raise NotImplementedError("Unsupported optimiser type")
         
@@ -299,7 +297,7 @@ def train_model_CL(net,
     elif optimiser_type == 'sgd':
         optimizer = optim.SGD(params, lr=lr, momentum=momentum)#, weight_decay = 0.001)
     elif optimiser_type == 'adam':
-        optimizer = optim.Adam(params, lr=lr)
+        optimizer = optim.AdamW(params, lr=lr)
     else:
         raise NotImplementedError("Unsupported optimiser type")
         
