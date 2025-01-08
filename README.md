@@ -49,6 +49,20 @@ This documentation file, providing an overview of the repository, its files, and
 2. **Running Training**: Use `training.py` to train the model. Update configurations in `globals.py` if necessary.
 3. **Running Experiments**: Open `experiment.ipynb` for interactive experiments.
 
+## Reproducibility
+
+All reported results can be reproduced with the `experiment.ipynb` notebook. This notebook is mainly set up to run on a cluster that uses SLURM. Thereby the `submitit` library is used to submit and track the cluster jobs.
+
+### Running the experiments on the cluster
+
+The only thing that needs to be changed in this case is that in the second cell of the `experiment.ipynb` notebook, the line `partition = ''` needs to be filled out with the cluster-specific partition_name that should be used to run the jobs.
+
+### Running the experiments locally
+
+In this case, a few more changes need to be made. First of all, in the second cell of the `experiment.ipynb` notebook, the line `DEVICE = torch.device("cuda:0")` should be changed to `DEVICE = globals.DEVICE` to run the code on the correct device. In the notebook, this is currently hardcoded since cluster jobs are normally submitted on nodes without GPUs, while the actual execution nodes have GPUs.
+
+Secondly, every line that looks similar to this one `ex1 = ex_parallel.submit(run_all_experiments, dataset='mnist', n_runs=5)`, where we call `ex_parallel.submit` on a function, needs to be replaced with just the function execution and the provided arguments. In the example from above the updated line would be `ex1 = run_all_experiments(dataset='mnist', n_runs=5)`. This change would then need to be applied to be applied for each experiment.
+
 ## Contribution
 Feel free to contribute to the project by creating issues or submitting pull requests.
 
