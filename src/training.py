@@ -46,7 +46,8 @@ def train_model(net,
                 lr = 0.003
                 ):
     """
-    Used to train on first task of CL.
+    Method for non-CL training
+    Used for joint training or to train on first task of CL.
     For more details, see comment of train_model_CL, most of which is analogous to this function
     """
     if patience is not None:
@@ -225,35 +226,35 @@ def train_model_CL(net,
     valloader : DataLoader
         DataLoader for the validation dataset.
     iteration : int
-        The current iteration or task number in the continual learning setting.
+        The current iteration (or task number) in the continual learning setting.
     verbose : bool, optional (default=False)
         Whether to print detailed training logs.
     n_epochs : int, optional (default=4)
-        Number of epochs to train the model.
+        Maximum number of epochs to train the model.
     validateOnAll : bool, optional (default=False)
-        If True, validate on all tasks seen so far instead of just the current task.
+        If True, validate on all tasks seen so far instead of just the current task. Must be set to true if plotting is desired.
     full_CE : bool, optional (default=False)
-        If True, apply cross entropy to all outputs, instead of only for last task
+        If True, apply cross entropy to all outputs, instead of only for last task (PTCE)
     kd_loss : float, optional (default=0)
-        Strength of Knowledge Distillation (KD) loss to transfer knowledge from `prevModel`.
+        Strength of Knowledge Distillation (KD) loss to transfer knowledge from `prevModel`. 0 means no KD loss applied.
     report_frequency : int, optional (default=1)
-        on how many epochs to report accuracies, confusion matrices, embeddings, etc. 
+        If verbose, specifies on how many epochs to report accuracies, confusion matrices, embeddings, etc. 
     lr : float, optional (default=0.003)
-        learning rate of optimizer
+        Learning rate of optimizer if using SGD
     momentum : float, optional (default=0.0)
-        momentum of optimizer (if applicable)
+        Momentum of optimizer if using SGD
     stopOnLoss : float, optional (default=0.03)
-        if not None, stop training when this cross entropy loss has been reached in training (will use validation loss if possible)
+        If not None, stop training when this cross entropy loss has been reached in training (will use validation loss if possible)
     stopOnValAcc : float, optional (default=None)
-        if not None, stop training when this accuracy has been reached during validation
+        If not None, stop training when this accuracy has been reached during validation
     optimiser_type : string, optional (default='sgd')
-        the type of optimiser used, supported are 'sgd', 'ogd', 'adam'
+        The type of optimiser used, supported are 'sgd', 'ogd', 'adam'
     plotting : bool, optional (default=False)
-        if true and if verbose is true, will also attempt to plot confusion matrices / embeddings
+        If true and if verbose is true, will also attempt to plot confusion matrices / embeddings
     patience : int, optional (default=None)
-        if set, will apply early stopping with this patience
+        If set, will apply early stopping with this patience parameter
     ogd_basis_size: int, optional (default=200)
-        if set and if optimiser_type is 'ogd', sets the max basis size for orthogonal gradient descent
+        If set and if optimiser_type is 'ogd', sets the max basis size for orthogonal gradient descent
     """
     torch.autograd.set_detect_anomaly = True
     if patience is not None:
