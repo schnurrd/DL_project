@@ -51,17 +51,43 @@ This documentation file, providing an overview of the repository, its files, and
 
 ## Reproducibility
 
-All reported results can be reproduced with the `experiment.ipynb` notebook. This notebook is mainly set up to run on a cluster that uses SLURM. Thereby the `submitit` library is used to submit and track the cluster jobs.
+All reported results can be reproduced using the `experiment.ipynb` notebook. This notebook is designed primarily for use on a GPU cluster that utilizes SLURM. The `submitit` library is then used to submit and track the cluster jobs.
 
 ### Running the experiments on the cluster
 
-The only thing that needs to be changed in this case is that in the second cell of the `experiment.ipynb` notebook, the line `partition = ''` needs to be filled out with the cluster-specific partition_name that should be used to run the jobs.
+To run experiments on a cluster, make the following change:
+
+1. Open the `experiment.ipynb` notebook.
+2. In the second cell, locate the line `partition = ''`.
+3. Replace the empty string (`''`) with the name of the cluster-specific partition (e.g., `partition = 'gpu_partition'`).
+
+No other modifications are necessary to run the experiments on the cluster.
 
 ### Running the experiments locally
 
-In this case, a few more changes need to be made. First of all, in the second cell of the `experiment.ipynb` notebook, the line `DEVICE = torch.device("cuda:0")` should be changed to `DEVICE = globals.DEVICE` to run the code on the correct device. In the notebook, this is currently hardcoded since cluster jobs are normally submitted on nodes without GPUs, while the actual execution nodes have GPUs.
+Running the experiments locally requires two additional adjustments:
 
-Secondly, every line that looks similar to this one `ex1 = ex_parallel.submit(run_all_experiments, dataset='mnist', n_runs=5)`, where we call `ex_parallel.submit` on a function, needs to be replaced with just the function execution and the provided arguments. In the example from above the updated line would be `ex1 = run_all_experiments(dataset='mnist', n_runs=5)`. This change would then need to be applied to be applied for each experiment.
+1. **Device Configuration**:
+   - In the second cell of the `experiment.ipynb` notebook, change:
+     ```python
+     DEVICE = torch.device("cuda:0")
+     ```
+     to:
+     ```python
+     DEVICE = globals.DEVICE
+     ```
+     This ensures the code uses the correct device configuration.
+
+2. **Updating Function Calls**:
+   - Lines that call `ex_parallel.submit` to submit jobs must be replaced with direct function calls. For example:
+     ```python
+     ex1 = ex_parallel.submit(run_all_experiments, dataset='mnist', n_runs=5)
+     ```
+     should be updated to:
+     ```python
+     ex1 = run_all_experiments(dataset='mnist', n_runs=5)
+     ```
+   - Apply this modification to every instance where `ex_parallel.submit` is used in the notebook.
 
 ## Contribution
 Feel free to contribute to the project by creating issues or submitting pull requests.
