@@ -46,7 +46,7 @@ This documentation file, providing an overview of the repository, its files, and
 ## Getting Started
 
 1. **Installation**: Clone the repository and install dependencies using `pip install -r requirements.txt`.
-2. **Download Datasets**: CIFAR-10 and MNIST are downloaded automatically using torch datasets when running experiments. Tiny ImageNet has to be downloaded manually. We downloaded it from http://cs231n.stanford.edu/tiny-imagenet-200.zip and preprocessed the dataset to make the structure of the val folder (the test set) identical to that of the train folder (the training set). Our preprocessed version is necessary to run the experiments for Tiny ImageNet and can be downloaded [here](https://drive.google.com/file/d/1hiQk0v9Nc0XhsLKrxGy91QvmAWJ2wp2O/view?usp=sharing). Download the zip archive and unzip the `tiny-imagenet-200` folder inside the `data` folder of the source project. Then Tiny ImageNet experiments can be ran.
+2. **Downloading Datasets**: CIFAR-10 and MNIST are downloaded automatically using torch datasets when running experiments. Tiny ImageNet has to be downloaded manually. We downloaded it from http://cs231n.stanford.edu/tiny-imagenet-200.zip and preprocessed the dataset to make the structure of the val folder (the test set) identical to that of the train folder (the training set). Our preprocessed version is necessary to run the experiments for Tiny ImageNet and can be downloaded [here](https://drive.google.com/file/d/1hiQk0v9Nc0XhsLKrxGy91QvmAWJ2wp2O/view?usp=sharing). Download the zip archive and unzip the `tiny-imagenet-200` folder inside the `data` folder of the source project. Then Tiny ImageNet experiments can be ran.
 3. **Running Experiments**: Open `experiment.ipynb` for interactive experiments.
 
 ## Reproducibility
