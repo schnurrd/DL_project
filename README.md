@@ -1,6 +1,6 @@
 # Project Overview
 
-This project contains building blocks which allow experimenting on CL pipelines. While it has been made as abstract as possible, some assumptions must be correct to use it. Everything has been built to support an additional out-of-distribution class for every task, image-specific logic has been build for the untransformed MNIST dataset, so a lot of the image-specific functions assume only one channel and assume that 0 corresponds to black.
+This project contains building blocks which allow experimenting on CL pipelines.
 
 ## File Descriptions
 
@@ -38,7 +38,7 @@ The main script for training the model. It integrates data loading, augmentation
 Contains visualization functions for analyzing and understanding model performance. Examples include plotting embeddings and confusion matrices.
 
 ### `notebooks/experiment.ipynb`
-This Jupyter Notebook is used for running and visualizing experiments. It allows to interactively test models, debug training, and visualize results like metrics, losses, confusion matrices, learned features and feature embeddings.
+This Jupyter Notebook is used for running and visualizing experiments. It allows to interactively test models, debug training, and visualize results like metrics, losses, confusion matrices, learned features and feature embeddings. This is done with the help of a `run_experiments()` method defined inside the notebook, which calls the `train_model()` and `train_model_CL()` methods from `src/training.py`. For more details on the different parameters used to reproduce the different configurations, take a look at the description of `train_model_CL()` inside `src/training.py`.
 
 ### `README.md`
 This documentation file, providing an overview of the repository, its files, and their functionalities.
@@ -46,7 +46,7 @@ This documentation file, providing an overview of the repository, its files, and
 ## Getting Started
 
 1. **Installation**: Clone the repository and install dependencies using `pip install -r requirements.txt`.
-2. **Running Training**: Use `training.py` to train the model. Update configurations in `globals.py` if necessary.
+2. **Download Datasets**: CIFAR-10 and MNIST are downloaded automatically using torch datasets when running experiments. We preprocessed the Tiny ImageNet dataset to make the structure of the val folder (the test set) identical to that of the train folder (the training set). Our preprocessed version is necessary to run the experiments for Tiny ImageNet and can be downloaded [here](https://drive.google.com/file/d/1hiQk0v9Nc0XhsLKrxGy91QvmAWJ2wp2O/view?usp=sharing).
 3. **Running Experiments**: Open `experiment.ipynb` for interactive experiments.
 
 ## Reproducibility

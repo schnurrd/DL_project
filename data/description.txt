@@ -1,0 +1,1 @@
+This folder is where all the datasets are stored. CIFAR-10 and MNIST are automatically downloaded when running the experiments notebook. Tiny ImageNet has to be downloaded manually (see readme).
