@@ -62,7 +62,7 @@ To run experiments on a cluster, make the following changes:
 3. In the second cell, locate the line `partition = ''`.
 4. Replace the empty string (`''`) with the name of the cluster-specific partition (e.g., `partition = 'gpu_partition'`).
 
-Furthermore, one needs to check if all the datasets can be downloaded on the cluster, and if this is not possible, download them locally before. The datasets will be downloaded upon the first call of the `run_experiments` function with the respective dataset, and the Tiny Imagenet needs to be downloaded separately.
+Furthermore, one needs to check if all the datasets can be downloaded on the cluster, and if this is not possible, download them locally before. The datasets will be downloaded upon the first call of the `run_experiments` function with the respective dataset, and the Tiny Imagenet needs to be downloaded separately as given in Section "Getting Started".
 
 ### Running the experiments locally
 
