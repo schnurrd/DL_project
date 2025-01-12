@@ -1,6 +1,6 @@
 # Project Overview
 
-This project contains building blocks which allow experimenting on CL pipelines.
+This is the code repository for our course project "Decomposing Forgetting: Insights into Class-Incremental Learning Dynamics" for the ETH Zurich Deep Learning course. The repo project contains code building blocks which allow experimenting on continual learning pipelines to identify specific subproblems that contribute to critical forgetting.
 
 ## File Descriptions
 
