@@ -7,3 +7,4 @@ torchvision==0.20.1
 captum
 tqdm
 submitit
+ipykernel
