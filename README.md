@@ -51,43 +51,24 @@ This documentation file, providing an overview of the repository, its files, and
 
 ## Reproducibility
 
-All reported results can be reproduced using the `experiment.ipynb` notebook. This notebook is designed primarily for use on a GPU cluster that utilizes SLURM. The `submitit` library is then used to submit and track the cluster jobs.
+All reported results can be reproduced using the `experiment.ipynb` notebook. This notebook is designed to work both on a GPU cluster that utilizes SLURM and locally on the current machine. The `submitit` library is then used to submit and track the cluster jobs.
 
 ### Running the experiments on the cluster
 
-To run experiments on a cluster, make the following change:
+To run experiments on a cluster, make the following changes:
 
 1. Open the `experiment.ipynb` notebook.
-2. In the second cell, locate the line `partition = ''`.
-3. Replace the empty string (`''`) with the name of the cluster-specific partition (e.g., `partition = 'gpu_partition'`).
+2. In the second cell, replace `RUN_LOCALLY = True` with `RUN_LOCALLY = False`
+3. In the second cell, locate the line `partition = ''`.
+4. Replace the empty string (`''`) with the name of the cluster-specific partition (e.g., `partition = 'gpu_partition'`).
 
 No other modifications are necessary to run the experiments on the cluster.
 
 ### Running the experiments locally
 
-Running the experiments locally requires two additional adjustments:
+Running the experiments locally requires only one check:
 
-1. **Device Configuration**:
-   - In the second cell of the `experiment.ipynb` notebook, change:
-     ```python
-     DEVICE = torch.device("cuda:0")
-     ```
-     to:
-     ```python
-     DEVICE = globals.DEVICE
-     ```
-     This ensures the code uses the correct device configuration.
-
-2. **Updating Function Calls**:
-   - Lines that call `ex_parallel.submit` to submit jobs must be replaced with direct function calls. For example:
-     ```python
-     ex1 = ex_parallel.submit(run_all_experiments, dataset='mnist', n_runs=5)
-     ```
-     should be updated to:
-     ```python
-     ex1 = run_all_experiments(dataset='mnist', n_runs=5)
-     ```
-   - Apply this modification to every instance where `ex_parallel.submit` is used in the notebook.
+1. In the second cell, ensure that `RUN_LOCALLY` is set to `True`, if this is not the case, set it to `True`
 
 ## Contribution
 Feel free to contribute to the project by creating issues or submitting pull requests.
