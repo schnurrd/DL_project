@@ -7,6 +7,9 @@ This is the code repository for our course project "Decomposing Forgetting: Insi
 ### `src/augmenting_dataloader.py`
 This file contains code for augmenting the dataset within the DataLoader with the third out-of-distribution class. It includes techniques to apply real-time data augmentation during training and defines custom transformations for input data.
 
+### `src/data_utils.py`
+Houses the method used for loading datasets and splitting them into tasks of train/test/validation sets.
+
 ### `src/embedding_measurements.py`
 Contains functions used to measure confusion, drift, etc across embeddings, used to quantify experiment results. Note that some measurements, such as embedding drift, ultimately were not used in the project report.
 
